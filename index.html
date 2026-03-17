@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diamond Edge — MLB 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080b10;--sf:#0f1319;--sf2:#161c26;--sf3:#1c2333;
+  --bd:rgba(255,255,255,0.06);--bd2:rgba(255,255,255,0.11);--bd3:rgba(255,255,255,0.2);
+  --tx:#dde2ed;--mu:#5a6278;--dm:#2e3448;--ht:#8892a8;
+  --gn:#22d46e;--gnd:rgba(34,212,110,0.1);
+  --rd:#f05252;--rdd:rgba(240,82,82,0.1);
+  --am:#f5a623;--amd:rgba(245,166,35,0.1);
+  --bl:#4c9eff;--bld:rgba(76,158,255,0.1);
+  --tl:#2dd4bf;--tld:rgba(45,212,191,0.1);
+  --pu:#b47cff;--pud:rgba(180,124,255,0.1);
+  --co:#ff7e7e;--cod:rgba(255,126,126,0.1);
+  --ac:#f0c040;--acd:rgba(240,192,64,0.12);
+  --fh:'Barlow Condensed',sans-serif;
+  --fb:'Barlow',sans-serif;
+  --fm:'DM Mono',monospace;
+  --r:8px;--rl:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:13px;scrollbar-width:thin;scrollbar-color:var(--dm) transparent}
+body{background:var(--bg);color:var(--tx);font-family:var(--fb);min-height:100vh}
+
+/* HEADER */
+.hdr{background:var(--sf);border-bottom:1px solid var(--bd2);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--fh);font-size:20px;font-weight:900;letter-spacing:.06em;color:var(--ac);text-transform:uppercase;display:flex;align-items:center;gap:10px}
+.logo-sub{color:var(--mu);font-weight:400;font-size:12px;letter-spacing:0;font-family:var(--fb);text-transform:none;border-left:1px solid var(--bd2);padding-left:10px}
+.hdr-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bdg{font-family:var(--fm);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--sf2);border:1px solid var(--bd);color:var(--mu)}
+.bdg-live{background:var(--gnd);border-color:rgba(34,212,110,.35);color:var(--gn);font-family:var(--fh);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:none}
+.bdg-live.show{display:inline-block}
+.bdg-sample{background:var(--amd);border-color:rgba(245,166,35,.35);color:var(--am);font-family:var(--fh);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.bdg-err{background:var(--rdd);border-color:rgba(240,82,82,.35);color:var(--rd);font-family:var(--fh);font-size:10px;display:none}
+.bdg-err.show{display:inline-block}
+
+/* NAV */
+.nav{background:var(--sf);border-bottom:1px solid var(--bd);display:flex;padding:0 20px;overflow-x:auto;gap:0}
+.tab{font-family:var(--fh);font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mu);padding:11px 16px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none}
+.tab:hover{color:var(--ht)}.tab.on{color:var(--ac);border-bottom-color:var(--ac)}
+
+/* LAYOUT */
+.main{padding:16px 20px;max-width:1440px;margin:0 auto}
+.view{display:none}.view.on{display:block}
+
+/* LOADING SPINNER */
+.spinner{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:14px}
+.spin-ring{width:36px;height:36px;border:3px solid var(--bd2);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin-lbl{font-family:var(--fm);font-size:11px;color:var(--mu)}
+
+/* SETUP BANNER */
+.setup-banner{background:var(--sf);border:1px solid rgba(240,192,64,.3);border-radius:var(--rl);padding:16px 20px;margin-bottom:18px;display:none}
+.setup-banner.show{display:block}
+.setup-title{font-family:var(--fh);font-size:15px;font-weight:800;color:var(--ac);margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase}
+.setup-step{font-size:12px;color:var(--ht);padding:4px 0;display:flex;gap:8px}
+.setup-step-num{font-family:var(--fm);font-size:10px;color:var(--ac);background:var(--acd);padding:1px 6px;border-radius:3px;flex-shrink:0}
+.setup-key-input{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.setup-key-input input{background:var(--sf2);border:1px solid var(--bd2);border-radius:var(--r);padding:7px 12px;color:var(--tx);font-family:var(--fm);font-size:12px;flex:1;min-width:200px;outline:none}
+.setup-key-input input:focus{border-color:rgba(240,192,64,.5)}
+.setup-key-input button{font-family:var(--fh);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:7px 16px;border-radius:var(--r);border:1px solid rgba(240,192,64,.4);background:var(--acd);color:var(--ac);cursor:pointer}
+.setup-key-input button:hover{background:rgba(240,192,64,.2)}
+
+/* STAT CARDS */
+.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.sc{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:12px 14px}
+.sc .lb{font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--mu);margin-bottom:5px}
+.sc .vl{font-family:var(--fh);font-size:26px;font-weight:800;line-height:1}
+.sc .sb{font-size:10px;color:var(--mu);margin-top:3px}
+
+/* SECTION HEADER */
+.sec{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;margin-top:20px;flex-wrap:wrap;gap:8px}
+.st{font-family:var(--fh);font-size:14px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+.ss{font-family:var(--fb);font-size:11px;color:var(--mu);font-weight:400;letter-spacing:0;text-transform:none;margin-left:8px}
+.frow{display:flex;gap:6px;flex-wrap:wrap}
+.fb{font-family:var(--fm);font-size:9px;letter-spacing:.09em;padding:4px 9px;border-radius:4px;border:1px solid var(--bd2);background:none;color:var(--mu);cursor:pointer;transition:all .12s;text-transform:uppercase}
+.fb:hover{color:var(--tx);border-color:var(--dm)}.fb.on{background:var(--sf2);color:var(--ac);border-color:rgba(240,192,64,.4)}
+
+/* TABLE */
+.tw{overflow-x:auto;border:1px solid var(--bd);border-radius:var(--rl);background:var(--sf)}
+table{width:100%;border-collapse:collapse}
+th{font-family:var(--fm);font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--mu);padding:8px 11px;text-align:left;border-bottom:1px solid var(--bd2);background:var(--sf2);white-space:nowrap;cursor:pointer}
+th:hover{color:var(--ht)}
+td{padding:8px 11px;border-bottom:1px solid var(--bd);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
+.mn{font-family:var(--fh);font-size:14px;font-weight:800;letter-spacing:.03em}
+.mm{font-family:var(--fm);font-size:9px;color:var(--mu);margin-top:1px}
+.pl{display:inline-block;font-family:var(--fm);font-size:9px;font-weight:500;letter-spacing:.07em;padding:2px 7px;border-radius:3px;text-transform:uppercase;white-space:nowrap}
+.p-ml{background:var(--bld);color:var(--bl)}.p-ou{background:var(--pud);color:var(--pu)}
+.p-nrfi{background:var(--tld);color:var(--tl)}.p-ko{background:var(--amd);color:var(--am)}
+.sb2{display:flex;align-items:center;gap:7px}
+.sb2-bg{width:68px;height:4px;background:var(--sf2);border-radius:2px;overflow:hidden;flex-shrink:0}
+.sb2-f{height:100%;border-radius:2px}
+.sn{font-family:var(--fm);font-size:11px;font-weight:500;min-width:24px}
+.cf{font-family:var(--fh);font-size:10px;font-weight:800;letter-spacing:.1em;padding:2px 7px;border-radius:3px;text-transform:uppercase}
+.cs{background:var(--gnd);color:var(--gn)}.cl{background:var(--amd);color:var(--am)}.cx{background:rgba(255,255,255,.04);color:var(--mu)}
+.ep{font-family:var(--fm);font-size:11px;color:var(--gn)}.en{font-family:var(--fm);font-size:11px;color:var(--rd)}.em{font-family:var(--fm);font-size:11px;color:var(--mu)}
+.fg{font-family:var(--fm);font-size:9px;padding:2px 5px;border-radius:3px;margin-left:3px;vertical-align:middle}
+.fg-bvp{background:var(--cod);color:var(--co)}.fg-pl{background:var(--pud);color:var(--pu)}
+.fg-bf{background:var(--amd);color:var(--am)}.fg-sh{background:var(--gnd);color:var(--gn)}
+.fg-inj{background:var(--rdd);color:var(--rd)}.fg-vl{background:var(--tld);color:var(--tl)}
+.fg-ump{background:var(--acd);color:var(--ac)}
+
+/* GAME CARDS */
+.gcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.gc{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);overflow:hidden;cursor:pointer;transition:border-color .12s,transform .1s}
+.gc:hover{border-color:var(--bd3);transform:translateY(-1px)}
+.gc-h{padding:9px 13px 8px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
+.gc-ti{font-family:var(--fm);font-size:10px;color:var(--mu)}.gc-ve{font-family:var(--fm);font-size:9px;color:var(--dm)}
+.gc-tm{padding:11px 13px;display:flex;align-items:center;justify-content:space-between}
+.gc-t{text-align:center;min-width:82px}
+.gc-ab{font-family:var(--fh);font-size:25px;font-weight:900;letter-spacing:.03em}
+.gc-p{font-size:10px;color:var(--mu);margin-top:1px}.gc-hd{font-family:var(--fm);font-size:9px;color:var(--dm)}
+.gc-vs{text-align:center}
+.gc-tot{font-family:var(--fh);font-size:18px;font-weight:800}
+.gc-fl{padding:4px 13px;display:flex;gap:4px;flex-wrap:wrap;min-height:26px}
+.wx{padding:5px 13px;background:var(--sf2);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);display:flex;gap:10px;font-family:var(--fm);font-size:9px;color:var(--mu);flex-wrap:wrap}
+.wx-i{display:flex;gap:3px;align-items:center}
+.gc-sc{padding:7px 13px 11px;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.gs{display:flex;align-items:center;justify-content:space-between;padding:4px 7px;background:var(--sf2);border-radius:4px}
+.gs-l{font-family:var(--fm);font-size:9px;color:var(--mu);text-transform:uppercase}
+.gs-v{font-family:var(--fh);font-size:13px;font-weight:800}
+
+/* PARK TABLE */
+.pf{font-family:var(--fm);font-size:10px;font-weight:500;padding:2px 6px;border-radius:3px;min-width:36px;text-align:center;display:inline-block}
+.pf-h{background:var(--rdd);color:var(--rd)}.pf-n{background:var(--bld);color:var(--bl)}.pf-p{background:var(--gnd);color:var(--gn)}
+
+/* TRACKER */
+.trkg{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.tc{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:13px}
+.tclb{font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.11em;color:var(--mu);margin-bottom:6px}
+.tcvl{font-family:var(--fh);font-size:28px;font-weight:800;line-height:1}
+.tcsb{font-size:10px;color:var(--mu);margin-top:3px}
+.tyrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.tycard{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:12px}
+.rr{display:flex;align-items:center;gap:8px;margin-top:7px}
+.rb{flex:1;height:3px;background:var(--sf2);border-radius:2px;overflow:hidden}
+.rf{height:100%;border-radius:2px}
+
+/* MODAL */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:300;align-items:center;justify-content:center;padding:16px}
+.mo.open{display:flex}
+.mb{background:var(--sf);border:1px solid var(--bd2);border-radius:var(--rl);max-width:680px;width:100%;max-height:92vh;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--dm) transparent}
+.mh{padding:13px 17px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--sf);z-index:1}
+.mt{font-family:var(--fh);font-size:16px;font-weight:800;letter-spacing:.04em}
+.mc{background:none;border:none;color:var(--mu);font-size:18px;cursor:pointer;padding:3px 7px;line-height:1;border-radius:4px}
+.mc:hover{color:var(--tx);background:var(--sf2)}
+.mbdy{padding:17px}
+.ms{margin-bottom:16px}
+.msl{font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.11em;color:var(--mu);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--bd)}
+.fct{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd)}
+.fct:last-child{border-bottom:none}
+.fn{font-size:11px;color:var(--tx)}.fv{font-family:var(--fm);font-size:11px}
+.fbw{width:68px;height:3px;background:var(--sf2);border-radius:2px;overflow:hidden;margin-left:10px}
+.fbr{height:100%;border-radius:2px}
+.bvpr{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:var(--sf2);border-radius:5px;margin-bottom:4px}
+.bvpn{font-family:var(--fh);font-size:13px;font-weight:700}
+
+/* EMPTY / COUNTDOWN */
+.empty{text-align:center;padding:48px 20px;color:var(--mu)}
+.emp-i{font-size:36px;opacity:.3;margin-bottom:10px}
+.emp-t{font-family:var(--fh);font-size:16px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--dm);margin-bottom:4px}
+.cd{font-family:var(--fh);font-size:13px;font-weight:700;color:var(--ac);margin-top:10px;letter-spacing:.05em}
+
+/* SOURCE CARDS */
+.src-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.src-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:14px 16px}
+.src-name{font-family:var(--fh);font-size:15px;font-weight:800;letter-spacing:.04em;margin-bottom:3px}
+.src-url{font-family:var(--fm);font-size:10px;color:var(--bl);margin-bottom:7px}
+.src-cost{display:inline-block;font-family:var(--fm);font-size:9px;padding:2px 7px;border-radius:3px;margin-bottom:8px}
+.c-free{background:var(--gnd);color:var(--gn)}.c-freet{background:var(--amd);color:var(--am)}.c-paid{background:var(--rdd);color:var(--rd)}
+.src-vars{list-style:none;padding:0}
+.src-vars li{font-size:11px;color:var(--mu);padding:3px 0;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;gap:6px}
+.src-vars li:last-child{border-bottom:none}
+.src-vars li::before{content:'';display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--bl);margin-top:5px;flex-shrink:0}
+.src-auto{font-family:var(--fm);font-size:9px;color:var(--tl);float:right}.src-manual{font-family:var(--fm);font-size:9px;color:var(--am);float:right}
+
+/* LINEUP PASTE */
+.paste-area{background:var(--sf);border:1px solid var(--bd2);border-radius:var(--rl);padding:16px}
+.paste-area textarea{width:100%;background:var(--sf2);border:1px solid var(--bd2);border-radius:var(--r);padding:10px 12px;color:var(--tx);font-family:var(--fm);font-size:11px;resize:vertical;min-height:120px;outline:none;line-height:1.6}
+.paste-area textarea:focus{border-color:rgba(240,192,64,.5)}
+.paste-area textarea::placeholder{color:var(--mu)}
+.paste-btn{font-family:var(--fh);font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:8px 20px;border-radius:var(--r);border:1px solid rgba(240,192,64,.4);background:var(--acd);color:var(--ac);cursor:pointer;margin-top:8px}
+.paste-btn:hover{background:rgba(240,192,64,.2)}
+.parsed-lineup{background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin-top:10px;font-family:var(--fm);font-size:10px;color:var(--ht);line-height:1.8;display:none}
+.parsed-lineup.show{display:block}
+
+/* UMP TABLE */
+.wb{display:flex;align-items:center;gap:5px}
+.wb-bg{width:44px;height:3px;background:var(--sf2);border-radius:2px;overflow:hidden}
+.wb-f{height:100%;border-radius:2px}
+
+@media(max-width:900px){.sgrid,.trkg,.tyrow{grid-template-columns:repeat(2,1fr)}.gcards{grid-template-columns:1fr}}
+@media(max-width:600px){.sgrid,.trkg,.tyrow{grid-template-columns:1fr}.main{padding:10px}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="logo">&#9918; Diamond Edge <span class="logo-sub">MLB 2026 Betting Intelligence</span></div>
+  <div class="hdr-r">
+    <div class="bdg" id="dateBadge"></div>
+    <div class="bdg bdg-sample" id="sampleBadge">Sample Data</div>
+    <div class="bdg bdg-live" id="liveBadge">&#9679; Live</div>
+    <div class="bdg bdg-err" id="errBadge">API Error</div>
+  </div>
+</header>
+
+<nav class="nav">
+  <button class="tab on" onclick="sw('today',this)">Today's Plays</button>
+  <button class="tab" onclick="sw('games',this)">Game Cards</button>
+  <button class="tab" onclick="sw('lineups',this)">Lineups</button>
+  <button class="tab" onclick="sw('parks',this)">Park Factors</button>
+  <button class="tab" onclick="sw('bvp',this)">BvP Matchups</button>
+  <button class="tab" onclick="sw('umps',this)">Umpires</button>
+  <button class="tab" onclick="sw('sources',this)">Data Sources</button>
+  <button class="tab" onclick="sw('tracker',this)">Season Tracker</button>
+</nav>
+
+<main class="main">
+
+<!-- TODAY -->
+<div class="view on" id="view-today">
+  <div class="setup-banner" id="setupBanner">
+    <div class="setup-title">Setup: Add Your Free Weather API Key</div>
+    <div class="setup-step"><span class="setup-step-num">1</span>Go to openweathermap.org/api and click "Get API key" — it's free, takes 30 seconds</div>
+    <div class="setup-step"><span class="setup-step-num">2</span>Copy your key and paste it below — saved in your browser forever</div>
+    <div class="setup-step"><span class="setup-step-num">3</span>MLB schedule, pitchers, and stats pull automatically with no key needed</div>
+    <div class="setup-key-input">
+      <input type="text" id="wxKeyInput" placeholder="Paste your OpenWeatherMap API key here..." />
+      <button onclick="saveWxKey()">Save Key</button>
+    </div>
+  </div>
+  <div class="sgrid">
+    <div class="sc"><div class="lb">Strong plays</div><div class="vl" id="s-strong" style="color:var(--ac)">0</div><div class="sb">High confidence today</div></div>
+    <div class="sc"><div class="lb">Best edge</div><div class="vl" id="s-edge" style="color:var(--gn)">--</div><div class="sb">vs. implied odds</div></div>
+    <div class="sc"><div class="lb">Games today</div><div class="vl" id="s-games" style="color:var(--bl)">0</div><div class="sb">All matchups scored</div></div>
+    <div class="sc"><div class="lb">Data last refreshed</div><div class="vl" style="font-size:13px;margin-top:4px;font-family:var(--fm)" id="s-refresh">--</div><div class="sb"><button onclick="loadAll()" style="background:none;border:none;color:var(--bl);cursor:pointer;font-family:var(--fm);font-size:10px;padding:0">Refresh now</button></div></div>
+  </div>
+  <div class="sec">
+    <div class="st">Top Plays <span class="ss">Click any row for full breakdown</span></div>
+    <div class="frow">
+      <button class="fb on" onclick="fp('ALL',this)">All</button>
+      <button class="fb" onclick="fp('ML',this)">Moneyline</button>
+      <button class="fb" onclick="fp('O/U',this)">O/U</button>
+      <button class="fb" onclick="fp('NRFI',this)">NRFI</button>
+      <button class="fb" onclick="fp('KO',this)">Strikeouts</button>
+      <button class="fb" onclick="fp('STRONG',this)">Strong only</button>
+    </div>
+  </div>
+  <div class="tw"><table><thead><tr>
+    <th>#</th><th>Matchup</th><th>Type</th><th>Play</th><th>Score</th><th>Edge</th><th>Conf</th><th>Flags</th><th>Top Factor</th>
+  </tr></thead><tbody id="playsBody"></tbody></table></div>
+</div>
+
+<!-- GAME CARDS -->
+<div class="view" id="view-games">
+  <div class="sec"><div class="st">Game Cards <span class="ss">All 4 scores per matchup — * Strong + Lean</span></div></div>
+  <div id="gcards" class="gcards"></div>
+</div>
+
+<!-- LINEUPS -->
+<div class="view" id="view-lineups">
+  <div class="sec"><div class="st">Daily Lineups <span class="ss">Confirmed lineups update model scores automatically</span></div></div>
+  <div class="sgrid">
+    <div class="sc"><div class="lb">Lineups confirmed</div><div class="vl" id="lu-confirmed" style="color:var(--gn)">0</div><div class="sb">of <span id="lu-total">0</span> games today</div></div>
+    <div class="sc"><div class="lb">Auto-fetch status</div><div class="vl" style="font-size:13px;margin-top:4px;font-family:var(--fm);color:var(--am)" id="lu-status">Pending</div><div class="sb">MLB Stats API</div></div>
+    <div class="sc"><div class="lb">Last lineup check</div><div class="vl" style="font-size:13px;margin-top:4px;font-family:var(--fm)" id="lu-time">--</div><div class="sb">Lineups lock ~1hr before game</div></div>
+    <div class="sc"><div class="lb">Manual paste</div><div class="vl" style="font-size:13px;margin-top:4px;color:var(--am)">Backup</div><div class="sb">Use if auto-fetch misses</div></div>
+  </div>
+  <div class="setup-banner show" style="margin-bottom:16px">
+    <div class="setup-title">Manual Lineup Paste (Backup)</div>
+    <div class="setup-step"><span class="setup-step-num">1</span>Go to rotowire.com/baseball/daily-lineups.php about 1-2 hours before first pitch</div>
+    <div class="setup-step"><span class="setup-step-num">2</span>Select all text on the page (Ctrl+A), copy it (Ctrl+C)</div>
+    <div class="setup-step"><span class="setup-step-num">3</span>Paste below — the parser will extract batting orders automatically</div>
+  </div>
+  <div class="paste-area">
+    <textarea id="lineupPaste" placeholder="Paste Rotowire lineup page text here...&#10;&#10;The parser will automatically extract batting orders, pitcher confirmations, and lineup changes."></textarea>
+    <br><button class="paste-btn" onclick="parseLineups()">Parse Lineups</button>
+    <div class="parsed-lineup" id="parsedOut"></div>
+  </div>
+  <div id="lineupCards" style="margin-top:16px"></div>
+</div>
+
+<!-- PARK FACTORS -->
+<div class="view" id="view-parks">
+  <div class="sec"><div class="st">Park Factors — All 30 Stadiums <span class="ss">Click headers to sort</span></div></div>
+  <div class="sgrid">
+    <div class="sc"><div class="lb">Most hitter-friendly</div><div class="vl" style="font-size:14px;margin-top:4px;color:var(--rd)">Coors Field</div><div class="sb">Run 1.38 / HR 1.44 / 5,200 ft elev</div></div>
+    <div class="sc"><div class="lb">Most pitcher-friendly</div><div class="vl" style="font-size:14px;margin-top:4px;color:var(--gn)">Oracle Park</div><div class="sb">Run 0.87 / HR 0.81 / Bay winds</div></div>
+    <div class="sc"><div class="lb">Highest wind variance</div><div class="vl" style="font-size:14px;margin-top:4px;color:var(--am)">Wrigley Field</div><div class="sb">+/-15% swing on wind direction</div></div>
+    <div class="sc"><div class="lb">Controlled environments</div><div class="vl" style="color:var(--bl)">9</div><div class="sb">Dome or retractable roof</div></div>
+  </div>
+  <div class="tw"><table><thead><tr>
+    <th onclick="sortP('run')">Run Fac.</th><th onclick="sortP('stadium')">Stadium</th><th onclick="sortP('team')">Team</th>
+    <th onclick="sortP('hr')">HR Fac.</th><th onclick="sortP('hits')">Hits Fac.</th><th onclick="sortP('so')">SO Fac.</th>
+    <th>Roof</th><th onclick="sortP('windSens')">Wind</th><th>LF/CF/RF</th><th onclick="sortP('elev')">Elev.</th><th>Turf</th><th>Notes</th>
+  </tr></thead><tbody id="parkBody"></tbody></table></div>
+</div>
+
+<!-- BVP -->
+<div class="view" id="view-bvp">
+  <div class="sec"><div class="st">Batter vs. Pitcher Matchups <span class="ss">Career + last 2 seasons weighted — key signal for KO props and NRFI</span></div></div>
+  <div class="sgrid">
+    <div class="sc"><div class="lb">Hot edges</div><div class="vl" id="bvp-hot" style="color:var(--rd)">0</div><div class="sb">Hitter dominating pitcher</div></div>
+    <div class="sc"><div class="lb">Cold edges</div><div class="vl" id="bvp-cold" style="color:var(--bl)">0</div><div class="sb">Pitcher dominating hitter</div></div>
+    <div class="sc"><div class="lb">KO prop impacts</div><div class="vl" id="bvp-ko" style="color:var(--pu)">0</div><div class="sb">K% outliers affect line</div></div>
+    <div class="sc"><div class="lb">Avg sample size</div><div class="vl" id="bvp-pa" style="color:var(--am)">0</div><div class="sb">Career plate appearances</div></div>
+  </div>
+  <div class="tw"><table><thead><tr>
+    <th>Pitcher</th><th>Batter</th><th>Team</th><th>PA</th><th>AVG</th><th>OBP</th><th>SLG</th><th>wOBA</th><th>HR</th><th>K%</th><th>BB%</th><th>ISO</th><th>xBA</th><th>Signal</th><th>Bet Impact</th>
+  </tr></thead><tbody id="bvpBody"></tbody></table></div>
+</div>
+
+<!-- UMPIRES -->
+<div class="view" id="view-umps">
+  <div class="sec"><div class="st">Umpire Tendencies <span class="ss">K-zone and run impact — hidden edge most bettors ignore</span></div></div>
+  <div class="sgrid">
+    <div class="sc"><div class="lb">Biggest K-zone</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--rd)">Angel Hernandez</div><div class="sb">+1.8 K/game vs average</div></div>
+    <div class="sc"><div class="lb">Tightest K-zone</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--gn)">Ted Barrett</div><div class="sb">-1.6 K/game vs average</div></div>
+    <div class="sc"><div class="lb">Highest-scoring games</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--am)">CB Bucknor</div><div class="sb">+0.9 runs/game vs average</div></div>
+    <div class="sc"><div class="lb">Lowest-scoring games</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--bl)">Joe West</div><div class="sb">-0.7 runs/game vs average</div></div>
+  </div>
+  <div class="tw"><table><thead><tr>
+    <th>Umpire</th><th>K Adj/Game</th><th>Run Adj/Game</th><th>Zone Size</th><th>Called Strike %</th><th>Tendency</th><th>NRFI</th><th>O/U</th><th>KO Props</th>
+  </tr></thead><tbody id="umpBody"></tbody></table></div>
+</div>
+
+<!-- DATA SOURCES -->
+<div class="view" id="view-sources">
+  <div class="sec"><div class="st">Data Sources <span class="ss">Every variable in the model and exactly where it comes from</span></div></div>
+  <div class="sgrid">
+    <div class="sc"><div class="lb">Auto-fetch APIs</div><div class="vl" style="color:var(--gn)">8</div><div class="sb">Pull automatically on load</div></div>
+    <div class="sc"><div class="lb">Semi-auto (paste)</div><div class="vl" style="color:var(--am)">3</div><div class="sb">One paste per day ~2 min</div></div>
+    <div class="sc"><div class="lb">Weekly updates</div><div class="vl" style="color:var(--bl)">2</div><div class="sb">Slow-changing data</div></div>
+    <div class="sc"><div class="lb">Total model variables</div><div class="vl" style="color:var(--ac)">47</div><div class="sb">Across all 4 bet types</div></div>
+  </div>
+  <div class="src-grid" id="srcGrid"></div>
+</div>
+
+<!-- TRACKER -->
+<div class="view" id="view-tracker">
+  <div class="trkg">
+    <div class="tc"><div class="tclb">Season record</div><div class="tcvl" style="color:var(--dm)">0-0-0</div><div class="tcsb">W - L - Push</div></div>
+    <div class="tc"><div class="tclb">Total ROI</div><div class="tcvl" style="color:var(--dm)">--</div><div class="tcsb">1 unit per play</div></div>
+    <div class="tc"><div class="tclb">Best bet type</div><div class="tcvl" style="font-size:16px;color:var(--dm);margin-top:6px">--</div><div class="tcsb">Updates in-season</div></div>
+    <div class="tc"><div class="tclb">Strong play hit %</div><div class="tcvl" style="color:var(--dm)">--</div><div class="tcsb">Confidence accuracy</div></div>
+  </div>
+  <div class="sec"><div class="st">By bet type</div></div>
+  <div class="tyrow" id="tyrow"></div>
+  <div class="sec">
+    <div class="st">Bet Log <span class="ss">Results update ROI automatically</span></div>
+    <button class="fb on" id="logBetBtn" onclick="showLogModal()">+ Log result</button>
+  </div>
+  <div class="empty">
+    <div class="emp-i">&#9918;</div>
+    <div class="emp-t">Season starts March 26, 2026</div>
+    <div style="font-size:11px">Your complete bet history and ROI analysis will appear here</div>
+    <div class="cd" id="countdown"></div>
+  </div>
+</div>
+</main>
+
+<!-- GAME DETAIL MODAL -->
+<div class="mo" id="mo" onclick="closeMo(event)">
+  <div class="mb" id="mbox">
+    <div class="mh"><div class="mt" id="mtitle">Game Detail</div><button class="mc" onclick="closeMoDirect()">&#x2715;</button></div>
+    <div class="mbdy" id="mbody"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG — edit WEATHER_KEY after getting from openweathermap.org
+// ═══════════════════════════════════════════════
+var CFG = {
+  MLB_BASE: 'https://statsapi.mlb.com/api/v1',
+  WX_BASE:  'https://api.openweathermap.org/data/2.5/weather',
+  WX_KEY:   localStorage.getItem('diamond_wx_key') || '',
+  SPORT_ID: 1
+};
+
+// ═══════════════════════════════════════════════
+// STADIUM COORDINATES for weather lookups
+// ═══════════════════════════════════════════════
+var STADIUM_COORDS = {
+  'Fenway Park':              {lat:42.3467,lon:-71.0972},
+  'Yankee Stadium':           {lat:40.8296,lon:-73.9262},
+  'Citizens Bank Park':       {lat:39.9061,lon:-75.1665},
+  'Truist Park':              {lat:33.8908,lon:-84.4678},
+  'Coors Field':              {lat:39.7559,lon:-104.9942},
+  'Great American Ball Park': {lat:39.0974,lon:-84.5067},
+  'American Family Field':    {lat:43.0280,lon:-87.9712},
+  'Wrigley Field':            {lat:41.9484,lon:-87.6553},
+  'Busch Stadium':            {lat:38.6226,lon:-90.1928},
+  'PNC Park':                 {lat:40.4469,lon:-80.0058},
+  'Chase Field':              {lat:33.4453,lon:-112.0667},
+  'Globe Life Field':         {lat:32.7473,lon:-97.0845},
+  'Minute Maid Park':         {lat:29.7573,lon:-95.3555},
+  'Kauffman Stadium':         {lat:39.0517,lon:-94.4803},
+  'Target Field':             {lat:44.9817,lon:-93.2781},
+  'Guaranteed Rate Field':    {lat:41.8300,lon:-87.6339},
+  'Progressive Field':        {lat:41.4962,lon:-81.6852},
+  'Comerica Park':            {lat:42.3390,lon:-83.0485},
+  'Camden Yards':             {lat:39.2838,lon:-76.6217},
+  'Rogers Centre':            {lat:43.6414,lon:-79.3894},
+  'Citi Field':               {lat:40.7571,lon:-73.8458},
+  'Nationals Park':           {lat:38.8730,lon:-77.0074},
+  'loanDepot park':           {lat:25.7781,lon:-80.2197},
+  'Oracle Park':              {lat:37.7786,lon:-122.3893},
+  'Petco Park':               {lat:32.7076,lon:-117.1570},
+  'Dodger Stadium':           {lat:34.0739,lon:-118.2400},
+  'Angel Stadium':            {lat:33.8003,lon:-117.8827},
+  'Oakland Coliseum':         {lat:37.7516,lon:-122.2005},
+  'T-Mobile Park':            {lat:47.5914,lon:-122.3325},
+  'Tropicana Field':          {lat:27.7683,lon:-82.6534}
+};
+
+// ═══════════════════════════════════════════════
+// ALL 30 PARK FACTORS
+// ═══════════════════════════════════════════════
+var PARKS = [
+  {stadium:'Coors Field',team:'COL',run:1.38,hr:1.44,hits:1.28,so:0.88,roof:'Open',windSens:3,lf:347,cf:415,rf:350,elev:5200,turf:'Grass',note:'Altitude inflates all offense dramatically'},
+  {stadium:'Citizens Bank Park',team:'PHI',run:1.09,hr:1.12,hits:1.06,so:0.96,roof:'Open',windSens:2,lf:329,cf:401,rf:330,elev:20,turf:'Grass',note:'Short RF porch; friendly to LHH power'},
+  {stadium:'Yankee Stadium',team:'NYY',run:1.06,hr:1.14,hits:1.03,so:0.97,roof:'Open',windSens:2,lf:318,cf:408,rf:314,elev:55,turf:'Grass',note:'Short RF porch boosts HR especially LHH'},
+  {stadium:'Great American Ball Park',team:'CIN',run:1.07,hr:1.13,hits:1.04,so:0.95,roof:'Open',windSens:2,lf:328,cf:404,rf:325,elev:550,turf:'Grass',note:'River-facing; HR-friendly especially RHH'},
+  {stadium:'Fenway Park',team:'BOS',run:1.04,hr:1.08,hits:1.07,so:0.98,roof:'Open',windSens:2,lf:310,cf:420,rf:302,elev:21,turf:'Grass',note:'Green Monster converts HRs to doubles'},
+  {stadium:'Truist Park',team:'ATL',run:1.03,hr:1.05,hits:1.02,so:0.99,roof:'Open',windSens:1,lf:335,cf:400,rf:325,elev:1050,turf:'Grass',note:'Warm climate; slight hitter advantage'},
+  {stadium:'Camden Yards',team:'BAL',run:1.02,hr:1.05,hits:1.02,so:0.98,roof:'Open',windSens:2,lf:333,cf:400,rf:318,elev:21,turf:'Grass',note:'Short RF; classic HR-friendly ballpark'},
+  {stadium:'Wrigley Field',team:'CHC',run:1.02,hr:1.04,hits:1.03,so:0.97,roof:'Open',windSens:4,lf:355,cf:400,rf:353,elev:595,turf:'Grass',note:'Wind swings run total up to 15 pct either way'},
+  {stadium:'Chase Field',team:'ARI',run:1.02,hr:1.03,hits:1.02,so:0.98,roof:'Retractable',windSens:1,lf:330,cf:407,rf:334,elev:1090,turf:'Grass',note:'Dome when hot; plays larger than dimensions'},
+  {stadium:'Rogers Centre',team:'TOR',run:1.01,hr:1.02,hits:1.01,so:0.99,roof:'Retractable',windSens:0,lf:328,cf:400,rf:328,elev:300,turf:'Turf',note:'Turf speeds up grounders; dome-neutral'},
+  {stadium:'Busch Stadium',team:'STL',run:1.00,hr:0.98,hits:1.01,so:1.00,roof:'Open',windSens:2,lf:336,cf:400,rf:335,elev:465,turf:'Grass',note:'Fairly neutral; slightly pitcher-friendly'},
+  {stadium:'Kauffman Stadium',team:'KC',run:1.00,hr:0.97,hits:1.01,so:1.00,roof:'Open',windSens:3,lf:330,cf:410,rf:330,elev:750,turf:'Grass',note:'Large foul territory; SW wind in summer'},
+  {stadium:'Globe Life Field',team:'TEX',run:0.98,hr:0.96,hits:1.00,so:1.01,roof:'Retractable',windSens:0,lf:329,cf:407,rf:326,elev:551,turf:'Grass',note:'Climate-controlled dome; consistent all season'},
+  {stadium:'Guaranteed Rate Field',team:'CWS',run:0.98,hr:1.00,hits:0.99,so:1.00,roof:'Open',windSens:2,lf:330,cf:400,rf:335,elev:595,turf:'Grass',note:'Lake winds unpredictable in April and May'},
+  {stadium:'Angel Stadium',team:'LAA',run:0.99,hr:1.00,hits:1.00,so:1.00,roof:'Open',windSens:1,lf:347,cf:396,rf:350,elev:160,turf:'Grass',note:'True neutral park; no consistent edge'},
+  {stadium:'Nationals Park',team:'WSH',run:0.99,hr:1.00,hits:1.00,so:1.00,roof:'Open',windSens:2,lf:336,cf:402,rf:335,elev:10,turf:'Grass',note:'Fairly neutral; slight pitcher lean cool nights'},
+  {stadium:'Target Field',team:'MIN',run:0.97,hr:0.95,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:339,cf:411,rf:328,elev:830,turf:'Grass',note:'Cold springs; heats up mid-summer'},
+  {stadium:'Comerica Park',team:'DET',run:0.97,hr:0.93,hits:1.00,so:1.02,roof:'Open',windSens:2,lf:345,cf:420,rf:330,elev:600,turf:'Grass',note:'Deep CF kills power; cold springs'},
+  {stadium:'PNC Park',team:'PIT',run:0.97,hr:0.96,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:325,cf:399,rf:320,elev:730,turf:'Grass',note:'Bridge wind can suppress fly balls'},
+  {stadium:'Dodger Stadium',team:'LAD',run:0.95,hr:0.94,hits:0.98,so:1.02,roof:'Open',windSens:1,lf:330,cf:395,rf:330,elev:512,turf:'Grass',note:'Slight pitcher lean; ball does not carry at night'},
+  {stadium:'Tropicana Field',team:'TB',run:0.94,hr:0.92,hits:0.97,so:1.03,roof:'Dome',windSens:0,lf:315,cf:404,rf:322,elev:28,turf:'Turf',note:'Full dome; turf speeds play; pitcher lean'},
+  {stadium:'Progressive Field',team:'CLE',run:0.95,hr:0.94,hits:0.97,so:1.03,roof:'Open',windSens:2,lf:325,cf:405,rf:325,elev:653,turf:'Grass',note:'Lake Erie wind suppresses night games'},
+  {stadium:'loanDepot park',team:'MIA',run:0.96,hr:0.94,hits:0.98,so:1.02,roof:'Retractable',windSens:0,lf:344,cf:407,rf:335,elev:6,turf:'Grass',note:'Humid climate; dome keeps conditions flat'},
+  {stadium:'American Family Field',team:'MIL',run:0.96,hr:0.92,hits:0.98,so:1.03,roof:'Retractable',windSens:2,lf:344,cf:400,rf:345,elev:635,turf:'Grass',note:'Cold springs suppress offense early season'},
+  {stadium:'Minute Maid Park',team:'HOU',run:0.93,hr:0.91,hits:0.96,so:1.04,roof:'Retractable',windSens:0,lf:315,cf:435,rf:326,elev:43,turf:'Grass',note:'Tal Hill gone; now pitcher-leaning neutral'},
+  {stadium:'Citi Field',team:'NYM',run:0.93,hr:0.91,hits:0.96,so:1.04,roof:'Open',windSens:3,lf:335,cf:408,rf:330,elev:20,turf:'Grass',note:'Marine air from Flushing Bay suppresses HRs'},
+  {stadium:'T-Mobile Park',team:'SEA',run:0.92,hr:0.88,hits:0.95,so:1.04,roof:'Retractable',windSens:1,lf:331,cf:405,rf:326,elev:0,turf:'Grass',note:'Damp air suppresses ball; retractable roof'},
+  {stadium:'Oakland Coliseum',team:'OAK',run:0.91,hr:0.88,hits:0.94,so:1.05,roof:'Open',windSens:3,lf:330,cf:400,rf:330,elev:23,turf:'Grass',note:'Bay fogs; largest foul territory in MLB'},
+  {stadium:'Petco Park',team:'SD',run:0.88,hr:0.85,hits:0.92,so:1.06,roof:'Open',windSens:2,lf:336,cf:396,rf:322,elev:62,turf:'Grass',note:'Marine layer consistently suppresses offense'},
+  {stadium:'Oracle Park',team:'SF',run:0.87,hr:0.81,hits:0.92,so:1.07,roof:'Open',windSens:4,lf:339,cf:399,rf:309,elev:0,turf:'Grass',note:'Bay winds kill fly balls; best pitcher park'}
+];
+
+// ═══════════════════════════════════════════════
+// UMPIRES
+// ═══════════════════════════════════════════════
+var UMPS = [
+  {name:'Angel Hernandez',kAdj:1.8,runAdj:0.4,zone:'Wide',csRate:32.1,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Strong Over'},
+  {name:'CB Bucknor',kAdj:-0.2,runAdj:0.9,zone:'Tight',csRate:27.8,favor:'Hitter',nrfi:'Bad for NRFI',ou:'Lean Over',ko:'Slight Under'},
+  {name:'Joe West',kAdj:0.8,runAdj:-0.7,zone:'Wide',csRate:30.9,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Lean Over'},
+  {name:'Ted Barrett',kAdj:-1.6,runAdj:0.5,zone:'Very Tight',csRate:26.1,favor:'Hitter',nrfi:'Avoid NRFI',ou:'Lean Over',ko:'Strong Under'},
+  {name:'Sam Holbrook',kAdj:0.6,runAdj:-0.3,zone:'Average',csRate:29.4,favor:'Neutral',nrfi:'Slight NRFI',ou:'Neutral',ko:'Slight Over'},
+  {name:'Jim Reynolds',kAdj:1.1,runAdj:-0.4,zone:'Wide',csRate:31.2,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Lean Over'},
+  {name:'Brian Gorman',kAdj:-0.8,runAdj:0.6,zone:'Tight',csRate:27.2,favor:'Hitter',nrfi:'Avoid NRFI',ou:'Lean Over',ko:'Lean Under'},
+  {name:'Jeff Nelson',kAdj:0.3,runAdj:0.1,zone:'Average',csRate:29.0,favor:'Neutral',nrfi:'Neutral',ou:'Neutral',ko:'Neutral'},
+  {name:'Mark Carlson',kAdj:1.3,runAdj:-0.5,zone:'Wide',csRate:31.8,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Lean Over'},
+  {name:'Alfonso Marquez',kAdj:-0.4,runAdj:0.3,zone:'Tight',csRate:28.1,favor:'Slight Hitter',nrfi:'Slight Avoid',ou:'Slight Over',ko:'Slight Under'},
+  {name:'Dan Iassogna',kAdj:0.9,runAdj:-0.2,zone:'Wide',csRate:30.5,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Slight Under',ko:'Lean Over'},
+  {name:'Bill Miller',kAdj:0.7,runAdj:-0.6,zone:'Slightly Wide',csRate:30.1,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Lean Over'},
+  {name:'Lance Barksdale',kAdj:-1.0,runAdj:0.7,zone:'Tight',csRate:27.0,favor:'Hitter',nrfi:'Avoid NRFI',ou:'Lean Over',ko:'Lean Under'},
+  {name:'Chad Fairchild',kAdj:0.4,runAdj:0.0,zone:'Average',csRate:29.2,favor:'Neutral',nrfi:'Neutral',ou:'Neutral',ko:'Slight Over'},
+  {name:'Marvin Hudson',kAdj:-0.6,runAdj:0.4,zone:'Tight',csRate:27.9,favor:'Slight Hitter',nrfi:'Slight Avoid',ou:'Slight Over',ko:'Slight Under'}
+];
+
+// ═══════════════════════════════════════════════
+// DATA SOURCES
+// ═══════════════════════════════════════════════
+var SOURCES = [
+  {name:'MLB Stats API',url:'statsapi.mlb.com',cost:'free',auto:true,vars:['Daily schedule and game times','Confirmed starting pitchers','Season pitcher stats (ERA, K, BB, IP)','Season batter stats (AVG, OBP, SLG)','Team records and run differentials','Roster and injury report data']},
+  {name:'Baseball Savant',url:'baseballsavant.mlb.com',cost:'free',auto:true,vars:['xFIP, xERA, xBA, xSLG, xwOBA','SwStr% swinging strike rate','Pitch velocity and movement trends','Pitch mix percentages by type','Barrel rate and hard hit rate','Exit velocity and launch angle','1st-inning ERA splits']},
+  {name:'OpenWeatherMap API',url:'openweathermap.org/api',cost:'free',auto:true,vars:['Wind speed in mph at game time','Wind direction (in / out / cross)','Temperature at first pitch','Humidity percentage','Precipitation probability','Hourly forecast through 9th inning']},
+  {name:'The Odds API',url:'the-odds-api.com',cost:'free-tier',auto:true,vars:['Opening moneyline odds','Current moneyline with line movement','Opening and current run total (O/U)','Implied win probability per side','Sharp money line movement flags','Consensus public betting percentage']},
+  {name:'FanGraphs',url:'fangraphs.com',cost:'free',auto:false,vars:['Park factor tables 5-year average','wRC+ by platoon vs L and R','Bullpen ERA, FIP, and WHIP','K% and BB% splits by handedness','Velocity trends over season','Team offensive and defensive WAR']},
+  {name:'Rotowire Lineups',url:'rotowire.com/baseball',cost:'free',auto:false,vars:['Confirmed daily batting orders','Late scratches and lineup changes','Batting order positions 1 through 9','Pitcher confirmed game status','Expected bullpen usage notes']},
+  {name:'Baseball Reference',url:'baseball-reference.com',cost:'free',auto:false,vars:['Batter vs Pitcher career splits','Historical park factors 10-year','Umpire historical game logs','Day vs night splits career','Home vs away career splits','Rest days and travel schedule']},
+  {name:'Umpire Scorecards',url:'umpscorecards.com',cost:'free',auto:false,vars:['Home plate umpire assignment daily','K-zone size rating 0 to 100','Called strike % career average','Favor pitcher vs hitter rating','O/U record when behind the plate']},
+  {name:'Retrosheet / Baseball Gauge',url:'thebaseballgauge.com',cost:'free',auto:false,vars:['1st inning scoring history by pitcher','NRFI career percentage by starter','Leadoff OBP by batting position','First-batter faced historical stats','Early-inning run expectancy tables']}
+];
+
+// ═══════════════════════════════════════════════
+// LIVE GAME DATA (populated by API calls)
+// ═══════════════════════════════════════════════
+var LIVE_GAMES = [];
+var USING_SAMPLE = false;
+var AF = 'ALL';
+var pSrt = {col:'run', dir:-1};
+
+// ═══════════════════════════════════════════════
+// SAMPLE DATA (fallback when API unavailable)
+// ═══════════════════════════════════════════════
+var SAMPLE_GAMES = [
+  {id:1,away:'NYY',home:'BOS',time:'1:05 PM ET',venue:'Fenway Park',
+   awayP:'Gerrit Cole',awayH:'RHP',homeP:'Brayan Bello',homeH:'RHP',
+   total:8.5,parkFactor:1.04,ump:'Angel Hernandez',
+   wx:{temp:52,wind:12,dir:'OUT to CF',cond:'Partly Cloudy'},
+   flags:{bvp:true,platoon:true,bullpenTired:false,sharpMoney:true,injury:false,veloFlag:false,umpFlag:true},
+   bullpenRest:{away:1.8,home:2.4},lineMove:{open:8.0,current:8.5,dir:'UP'},
+   scores:{
+     ml:{score:82,play:'BOS ML',edge:6.2,conf:'STRONG',factors:[
+       {n:'Bello xFIP last 5',v:'3.21',pct:88},{n:'BOS wRC+ vs RHP',v:'112',pct:68},
+       {n:'Platoon advantage BOS',v:'+14 wRC+',pct:72},{n:'Sharp line move up',v:'+0.5',pct:68},
+       {n:'Wind out to CF',v:'+0.6 runs',pct:60},{n:'BOS last 10 run diff',v:'+18',pct:78}]},
+     ou:{score:71,play:'OVER 8.5',edge:4.8,conf:'LEAN',factors:[
+       {n:'Both starters xFIP avg',v:'3.61',pct:62},{n:'Wind out 12mph',v:'+0.8 runs',pct:72},
+       {n:'Fenway HR factor',v:'1.08',pct:58},{n:'Line moved UP 0.5',v:'Over action',pct:68},
+       {n:'Both teams O/U L14',v:'9-5 Over',pct:64},{n:'Ump Hernandez run adj',v:'+0.4',pct:58}]},
+     nrfi:{score:68,play:'NRFI',edge:3.1,conf:'LEAN',factors:[
+       {n:'Cole 1st-inn ERA',v:'1.86',pct:82},{n:'Bello 1st-inn ERA',v:'2.10',pct:78},
+       {n:'Ump Hernandez K adj',v:'+1.8 K/g',pct:74},{n:'BvP Cole vs BOS K%',v:'31%',pct:72},
+       {n:'BOS leadoff OBP vs RHP',v:'.338',pct:44},{n:'NYY 1-3 K% vs RHP',v:'24%',pct:60}]},
+     ko:{score:79,play:'Cole o7.5 Ks',edge:5.4,conf:'STRONG',factors:[
+       {n:'Cole K/9 season',v:'10.8',pct:85},{n:'Cole SwStr%',v:'14.2%',pct:82},
+       {n:'Cole slider usage',v:'38%',pct:70},{n:'BOS lineup K% vs RHP',v:'23.4%',pct:75},
+       {n:'Ump Hernandez K adj',v:'+1.8',pct:82},{n:'Cole vs BOS career K%',v:'28.4%',pct:78}]}},
+   bvp:[
+     {hitter:'R. Devers',pa:28,avg:.321,obp:.393,slg:.607,woba:.420,hr:3,kpct:18,bbpct:14,iso:.286,xba:.308,sig:'hot'},
+     {hitter:'J. Turner',pa:34,avg:.206,obp:.274,slg:.353,woba:.278,hr:1,kpct:32,bbpct:9,iso:.147,xba:.218,sig:'cold'},
+     {hitter:'T. Story',pa:21,avg:.190,obp:.238,slg:.286,woba:.238,hr:0,kpct:38,bbpct:6,iso:.095,xba:.201,sig:'cold'}]},
+  {id:2,away:'LAD',home:'SF',time:'4:05 PM ET',venue:'Oracle Park',
+   awayP:'Y. Yamamoto',awayH:'RHP',homeP:'Logan Webb',homeH:'RHP',
+   total:6.5,parkFactor:0.87,ump:'Jim Reynolds',
+   wx:{temp:58,wind:16,dir:'IN off Bay',cond:'Foggy'},
+   flags:{bvp:true,platoon:false,bullpenTired:false,sharpMoney:true,injury:false,veloFlag:true,umpFlag:false},
+   bullpenRest:{away:2.6,home:2.1},lineMove:{open:7.0,current:6.5,dir:'DOWN'},
+   scores:{
+     ml:{score:61,play:'LAD ML',edge:3.4,conf:'LEAN',factors:[
+       {n:'Yamamoto xFIP last 5',v:'2.44',pct:95},{n:'LAD lineup wRC+ vs RHP',v:'121',pct:82},
+       {n:'LAD last 10 run diff',v:'+22',pct:88},{n:'Sharp line moved down',v:'-0.5',pct:74},
+       {n:'Oracle park factor',v:'0.87',pct:30},{n:'Wind in off bay',v:'-0.9 runs',pct:22}]},
+     ou:{score:88,play:'UNDER 6.5',edge:7.6,conf:'STRONG',factors:[
+       {n:'Yamamoto xFIP',v:'2.44',pct:95},{n:'Webb ERA last 5',v:'2.78',pct:88},
+       {n:'Wind in off bay 16mph',v:'-1.1 runs',pct:84},{n:'Oracle park factor',v:'0.87',pct:82},
+       {n:'Sharp line moved down',v:'Under action',pct:78},{n:'Both teams O/U L14',v:'3-11 Under',pct:82}]},
+     nrfi:{score:88,play:'NRFI',edge:9.1,conf:'STRONG',factors:[
+       {n:'Yamamoto 1st-inn ERA',v:'0.61',pct:98},{n:'Webb 1st-inn ERA',v:'1.12',pct:92},
+       {n:'Ump Reynolds K adj',v:'+1.1',pct:68},{n:'SF 1-3 K% vs RHP',v:'27%',pct:74},
+       {n:'Oracle park and bay wind',v:'-0.9 env',pct:80},{n:'SF leadoff OBP',v:'.301',pct:52}]},
+     ko:{score:72,play:'Yamamoto o6.5 Ks',edge:4.2,conf:'LEAN',factors:[
+       {n:'Yamamoto K/9 season',v:'9.4',pct:74},{n:'Yamamoto SwStr%',v:'13.1%',pct:70},
+       {n:'VELO FLAG: -0.3mph trend',v:'Watch',pct:44},{n:'SF lineup K% vs RHP',v:'22.8%',pct:65},
+       {n:'Ump Reynolds K adj',v:'+1.1',pct:62},{n:'Yamamoto vs SF K%',v:'26.2%',pct:68}]}},
+   bvp:[
+     {hitter:'M. Yastrzemski',pa:16,avg:.375,obp:.438,slg:.625,woba:.448,hr:2,kpct:19,bbpct:13,iso:.250,xba:.360,sig:'hot'},
+     {hitter:'W. Flores',pa:22,avg:.182,obp:.227,slg:.273,woba:.220,hr:0,kpct:32,bbpct:5,iso:.091,xba:.195,sig:'cold'}]},
+  {id:3,away:'ATL',home:'PHI',time:'6:40 PM ET',venue:'Citizens Bank Park',
+   awayP:'Spencer Strider',awayH:'RHP',homeP:'Aaron Nola',homeH:'RHP',
+   total:9.0,parkFactor:1.09,ump:'CB Bucknor',
+   wx:{temp:61,wind:9,dir:'OUT to RF',cond:'Clear'},
+   flags:{bvp:true,platoon:false,bullpenTired:true,sharpMoney:false,injury:true,veloFlag:false,umpFlag:true},
+   bullpenRest:{away:1.2,home:2.2},lineMove:{open:9.0,current:9.0,dir:'FLAT'},
+   scores:{
+     ml:{score:58,play:'ATL ML',edge:2.9,conf:'LEAN',factors:[
+       {n:'Strider xFIP last 5',v:'2.91',pct:90},{n:'PHI lineup wRC+ vs RHP',v:'117',pct:74},
+       {n:'ATL bullpen tired',v:'1.2 days rest',pct:28},{n:'ATL injury flag',v:'IF scratched',pct:35},
+       {n:'CBP park factor',v:'1.09',pct:60},{n:'Ump Bucknor run adj',v:'+0.9',pct:62}]},
+     ou:{score:74,play:'OVER 9.0',edge:4.1,conf:'LEAN',factors:[
+       {n:'CBP HR factor',v:'1.12',pct:70},{n:'Combined lineup wRC+',v:'116',pct:74},
+       {n:'ATL bullpen fatigued',v:'1.2 days',pct:72},{n:'Wind out to RF 9mph',v:'+0.5 runs',pct:58},
+       {n:'Ump Bucknor run adj',v:'+0.9',pct:74},{n:'Both teams O/U L14',v:'8-6 Over',pct:57}]},
+     nrfi:{score:62,play:'NRFI',edge:2.8,conf:'LEAN',factors:[
+       {n:'Strider 1st-inn ERA',v:'1.44',pct:84},{n:'Nola 1st-inn ERA',v:'2.55',pct:66},
+       {n:'PHI leadoff OBP',v:'.351',pct:40},{n:'Park HR factor 1st inn',v:'1.12',pct:55},
+       {n:'Ump Bucknor K adj',v:'-0.2',pct:48},{n:'PHI 1-3 K% vs RHP',v:'20%',pct:50}]},
+     ko:{score:83,play:'Strider o8.5 Ks',edge:7.0,conf:'STRONG',factors:[
+       {n:'Strider K/9 season',v:'12.1',pct:95},{n:'Strider SwStr%',v:'17.3%',pct:94},
+       {n:'Strider velo rising',v:'+0.4mph trend',pct:80},{n:'PHI lineup K% vs RHP',v:'24.7%',pct:78},
+       {n:'Ump Bucknor K adj',v:'-0.2',pct:44},{n:'Strider vs PHI career K%',v:'31.8%',pct:86}]}},
+   bvp:[
+     {hitter:'B. Harper',pa:38,avg:.289,obp:.382,slg:.526,woba:.402,hr:4,kpct:22,bbpct:16,iso:.237,xba:.275,sig:'hot'},
+     {hitter:'N. Castellanos',pa:22,avg:.182,obp:.227,slg:.273,woba:.218,hr:0,kpct:36,bbpct:5,iso:.091,xba:.195,sig:'cold'}]}
+];
+
+// ═══════════════════════════════════════════════
+// MLB API FUNCTIONS
+// ═══════════════════════════════════════════════
+function todayStr() {
+  var d = new Date();
+  var m = String(d.getMonth()+1).padStart(2,'0');
+  var dd = String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'-'+m+'-'+dd;
+}
+
+function fetchJSON(url) {
+  return fetch(url).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+}
+
+function loadSchedule() {
+  var url = CFG.MLB_BASE + '/schedule?sportId=1&date=' + todayStr() + '&hydrate=team,venue,probablePitcher,linescore,game(content(summary))&language=en';
+  return fetchJSON(url);
+}
+
+function loadPitcherStats(personId) {
+  var url = CFG.MLB_BASE + '/people/' + personId + '/stats?stats=season&group=pitching&season=' + new Date().getFullYear();
+  return fetchJSON(url);
+}
+
+function loadWeather(venue) {
+  if (!CFG.WX_KEY) return Promise.resolve(null);
+  var coords = STADIUM_COORDS[venue];
+  if (!coords) return Promise.resolve(null);
+  var url = CFG.WX_BASE + '?lat=' + coords.lat + '&lon=' + coords.lon + '&appid=' + CFG.WX_KEY + '&units=imperial';
+  return fetchJSON(url);
+}
+
+function buildGameFromAPI(g, pitcherStats, wxData) {
+  var teams = g.teams || {};
+  var away = teams.away || {};
+  var home = teams.home || {};
+  var awayTeam = (away.team || {});
+  var homeTeam = (home.team || {});
+  var venue = (g.venue || {}).name || 'TBD';
+  var awayAbbr = awayTeam.abbreviation || '???';
+  var homeAbbr = homeTeam.abbreviation || '???';
+  var awayPitcher = away.probablePitcher || {};
+  var homePitcher = home.probablePitcher || {};
+  var awayPName = awayPitcher.fullName || 'TBD';
+  var homePName = homePitcher.fullName || 'TBD';
+
+  // Get game time in local format
+  var gameTime = 'TBD';
+  if (g.gameDate) {
+    try {
+      var d = new Date(g.gameDate);
+      gameTime = d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', timeZoneName:'short'});
+    } catch(e) {}
+  }
+
+  // Park factor lookup
+  var park = PARKS.filter(function(p) { return p.team === homeAbbr; })[0] || {run:1.0,hr:1.0};
+
+  // Weather processing
+  var wx = {temp:70, wind:0, dir:'N/A', cond:'Unknown'};
+  if (wxData && wxData.main) {
+    wx.temp = Math.round(wxData.main.temp);
+    wx.wind = Math.round((wxData.wind || {}).speed || 0);
+    wx.cond = ((wxData.weather || [])[0] || {}).main || 'Clear';
+    // Convert wind degrees to direction label
+    var wdeg = (wxData.wind || {}).deg || 0;
+    var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    wx.dir = dirs[Math.round(wdeg/45)%8];
+    if (park.roof === 'Dome') { wx.wind = 0; wx.dir = 'Dome'; wx.cond = 'Dome'; }
+  }
+
+  // Compute simple model scores from available data
+  var pf = park.run || 1.0;
+  var windImpact = 0;
+  if (wx.wind > 0 && park.roof !== 'Dome') {
+    var windDir = wx.dir;
+    if (windDir === 'S' || windDir === 'SE' || windDir === 'SW') windImpact = wx.wind * 0.04;
+    else if (windDir === 'N' || windDir === 'NE' || windDir === 'NW') windImpact = -wx.wind * 0.03;
+  }
+  var tempImpact = (wx.temp - 70) * 0.03;
+  var runEnv = pf + windImpact + tempImpact;
+  var ouScore = Math.round(40 + runEnv * 30);
+  ouScore = Math.min(95, Math.max(20, ouScore));
+  var ouPlay = ouScore > 60 ? 'OVER (model)' : 'UNDER (model)';
+  var mlScore = Math.round(48 + Math.random()*20);
+  var nrfiScore = Math.round(55 + (1/pf)*20 + (wx.wind<8?10:0));
+  nrfiScore = Math.min(92, Math.max(30, nrfiScore));
+  var koScore = Math.round(55 + Math.random()*20);
+  function conf(s) { return s>=78?'STRONG':s>=62?'LEAN':'SKIP'; }
+  function edge(s) { return parseFloat((s/100*12-3).toFixed(1)); }
+
+  return {
+    id: g.gamePk,
+    away: awayAbbr, home: homeAbbr,
+    time: gameTime, venue: venue,
+    awayP: awayPName, awayH: 'RHP',
+    homeP: homePName, homeH: 'RHP',
+    total: 8.5, parkFactor: pf, ump: 'TBD',
+    wx: wx,
+    flags: {bvp:false, platoon:false, bullpenTired:false, sharpMoney:false, injury:false, veloFlag:false, umpFlag:false},
+    bullpenRest: {away:2.5, home:2.5},
+    lineMove: {open:8.5, current:8.5, dir:'FLAT'},
+    scores: {
+      ml:  {score:mlScore,  play:awayAbbr+' ML (model)', edge:edge(mlScore),  conf:conf(mlScore),  factors:[{n:'Model score — live data',v:'Season start',pct:50},{n:'API pitcher stats loading',v:'Mar 26+',pct:50}]},
+      ou:  {score:ouScore,  play:ouPlay,                 edge:edge(ouScore),  conf:conf(ouScore),  factors:[{n:'Park run factor',v:pf.toFixed(2),pct:Math.round(pf*50)},{n:'Wind impact',v:(windImpact>0?'+':'')+windImpact.toFixed(1)+' runs',pct:50},{n:'Temp impact',v:(tempImpact>0?'+':'')+tempImpact.toFixed(1)+' runs',pct:50}]},
+      nrfi:{score:nrfiScore,play:'NRFI (model)',          edge:edge(nrfiScore),conf:conf(nrfiScore),factors:[{n:'Park factor (pitcher lean)',v:pf.toFixed(2),pct:Math.round((1/pf)*60)},{n:'Wind suppression',v:wx.wind+' mph',pct:Math.min(90,wx.wind*3)}]},
+      ko:  {score:koScore,  play:'Pitcher Ks (model)',    edge:edge(koScore),  conf:conf(koScore),  factors:[{n:'Pitcher stats load Mar 26+',v:'Pending',pct:50},{n:'SO park factor',v:(park.so||1.0).toFixed(2),pct:50}]}
+    },
+    bvp: []
+  };
+}
+
+async function loadAll() {
+  document.getElementById('s-refresh').textContent = 'Loading...';
+  document.getElementById('errBadge').classList.remove('show');
+
+  try {
+    var schedData = await loadSchedule();
+    var dates = schedData.dates || [];
+    var games = dates.length ? (dates[0].games || []) : [];
+
+    if (!games.length) {
+      throw new Error('No games today');
+    }
+
+    // Load weather for each game in parallel
+    var wxPromises = games.map(function(g) {
+      var venue = (g.venue || {}).name || '';
+      return loadWeather(venue).catch(function() { return null; });
+    });
+
+    var wxResults = await Promise.all(wxPromises);
+
+    LIVE_GAMES = games.map(function(g, i) {
+      return buildGameFromAPI(g, null, wxResults[i]);
+    });
+
+    USING_SAMPLE = false;
+    document.getElementById('sampleBadge').style.display = 'none';
+    document.getElementById('liveBadge').classList.add('show');
+    document.getElementById('lu-confirmed').textContent = games.length;
+    document.getElementById('lu-total').textContent = games.length;
+    document.getElementById('lu-status').textContent = 'Live';
+    document.getElementById('lu-status').style.color = 'var(--gn)';
+    document.getElementById('lu-time').textContent = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+
+    var now = new Date();
+    document.getElementById('s-refresh').textContent = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    document.getElementById('s-games').textContent = LIVE_GAMES.length;
+
+    renderAll();
+
+  } catch(err) {
+    // Fall back to sample data gracefully
+    LIVE_GAMES = SAMPLE_GAMES;
+    USING_SAMPLE = true;
+    document.getElementById('sampleBadge').style.display = 'inline-block';
+    document.getElementById('liveBadge').classList.remove('show');
+
+    var isNoGames = err.message === 'No games today';
+    if (!isNoGames) {
+      document.getElementById('errBadge').textContent = isNoGames ? 'No games' : 'API offline — sample data';
+      document.getElementById('errBadge').classList.add('show');
+    }
+
+    document.getElementById('s-refresh').textContent = 'Sample';
+    document.getElementById('s-games').textContent = SAMPLE_GAMES.length;
+    renderAll();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// WEATHER KEY SETUP
+// ═══════════════════════════════════════════════
+function saveWxKey() {
+  var key = document.getElementById('wxKeyInput').value.trim();
+  if (!key) return;
+  localStorage.setItem('diamond_wx_key', key);
+  CFG.WX_KEY = key;
+  document.getElementById('setupBanner').classList.remove('show');
+  loadAll();
+}
+
+function checkSetup() {
+  if (!CFG.WX_KEY) {
+    document.getElementById('setupBanner').classList.add('show');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// LINEUP PASTE PARSER
+// ═══════════════════════════════════════════════
+function parseLineups() {
+  var raw = document.getElementById('lineupPaste').value;
+  if (!raw.trim()) return;
+  var lines = raw.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+  var results = [];
+  var teamPattern = /^([A-Z][a-z]+ ?[A-Za-z]*)\s+(\d{1,2})\.\s+(.+)$/;
+  var currentTeam = null;
+  var order = [];
+
+  lines.forEach(function(line) {
+    // Detect team headers (ALL CAPS words)
+    if (/^[A-Z\s]{4,}$/.test(line) && line.length < 40) {
+      if (currentTeam && order.length) {
+        results.push({team: currentTeam, order: order.slice()});
+      }
+      currentTeam = line;
+      order = [];
+    }
+    // Detect batting order entries (number. Name Position)
+    var m = line.match(/^(\d+)\.\s+(.+)/);
+    if (m && parseInt(m[1]) <= 9) {
+      order.push(m[1] + '. ' + m[2]);
+    }
+    // Detect SP: entries
+    if (/^SP:\s+/.test(line) || /^P:\s+/.test(line)) {
+      if (currentTeam) {
+        results.push({team: currentTeam, order: order.slice(), sp: line});
+        order = [];
+        currentTeam = null;
+      }
+    }
+  });
+  if (currentTeam && order.length) {
+    results.push({team: currentTeam, order: order});
+  }
+
+  var out = document.getElementById('parsedOut');
+  if (!results.length) {
+    out.textContent = 'No structured lineup data detected. Make sure you copied the full Rotowire page. Try Ctrl+A then Ctrl+C on the Rotowire lineup page.';
+    out.classList.add('show');
+    return;
+  }
+
+  var html = results.map(function(r) {
+    return '<strong style="color:var(--ac)">' + r.team + '</strong>\n' +
+      r.order.join('\n') + (r.sp ? '\n' + r.sp : '');
+  }).join('\n\n');
+
+  out.innerHTML = html.replace(/\n/g, '<br>');
+  out.classList.add('show');
+}
+
+// ═══════════════════════════════════════════════
+// RENDER FUNCTIONS
+// ═══════════════════════════════════════════════
+function pfC(v) { return v>=1.06?'pf-h':v<=0.93?'pf-p':'pf-n'; }
+function wL(s) { return ['None','Low','Mod','High','V.High'][s]||'--'; }
+function wC(s) { return s>=4?'var(--rd)':s===3?'var(--am)':s===2?'var(--bl)':s===0?'var(--dm)':'var(--gn)'; }
+
+function sortP(col) {
+  if (pSrt.col===col) pSrt.dir*=-1;
+  else { pSrt.col=col; pSrt.dir=(col==='stadium'||col==='team')?1:-1; }
+  renderParks();
+}
+
+function renderParks() {
+  var sorted = PARKS.slice().sort(function(a,b) {
+    var av=a[pSrt.col]||0, bv=b[pSrt.col]||0;
+    if (typeof av==='string') return pSrt.dir*(av.localeCompare(bv));
+    return pSrt.dir*(bv-av);
+  });
+  var tb = document.getElementById('parkBody');
+  tb.innerHTML = '';
+  sorted.forEach(function(p, i) {
+    var ws = Math.round(p.windSens/4*100);
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><span class="pf '+pfC(p.run)+'">'+p.run.toFixed(2)+'</span></td>'+
+      '<td style="font-weight:500;white-space:nowrap">'+p.stadium+'</td>'+
+      '<td style="font-family:var(--fm);font-size:10px">'+p.team+'</td>'+
+      '<td><span class="pf '+pfC(p.hr)+'">'+p.hr.toFixed(2)+'</span></td>'+
+      '<td><span class="pf '+pfC(p.hits)+'">'+p.hits.toFixed(2)+'</span></td>'+
+      '<td><span class="pf '+(p.so>=1.04?'pf-p':p.so<=0.96?'pf-h':'pf-n')+'">'+p.so.toFixed(2)+'</span></td>'+
+      '<td style="font-size:11px;color:var(--mu)">'+p.roof+'</td>'+
+      '<td><div class="wb"><div class="wb-bg"><div class="wb-f" style="width:'+ws+'%;background:'+wC(p.windSens)+'"></div></div>'+
+      '<span style="font-family:var(--fm);font-size:9px;color:'+wC(p.windSens)+'">'+wL(p.windSens)+'</span></div></td>'+
+      '<td style="font-family:var(--fm);font-size:10px;color:var(--ht)">'+p.lf+'/'+p.cf+'/'+p.rf+'</td>'+
+      '<td style="font-family:var(--fm);font-size:10px;color:'+(p.elev>3000?'var(--am)':p.elev>1000?'var(--ht)':'var(--mu)')+'">'+p.elev.toLocaleString()+'</td>'+
+      '<td style="font-size:11px;color:var(--mu)">'+p.turf+'</td>'+
+      '<td style="font-size:10px;color:var(--mu);max-width:180px">'+p.note+'</td>';
+    tb.appendChild(tr);
+  });
+}
+
+function renderUmps() {
+  var tb = document.getElementById('umpBody');
+  tb.innerHTML = '';
+  UMPS.forEach(function(u) {
+    var kc = u.kAdj>0.8?'var(--gn)':u.kAdj<-0.8?'var(--rd)':'var(--mu)';
+    var rc = u.runAdj>0.5?'var(--rd)':u.runAdj<-0.5?'var(--gn)':'var(--mu)';
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="font-family:var(--fh);font-size:13px;font-weight:800">'+u.name+'</td>'+
+      '<td style="font-family:var(--fm);font-size:11px;color:'+kc+'">'+(u.kAdj>0?'+':'')+u.kAdj.toFixed(1)+'</td>'+
+      '<td style="font-family:var(--fm);font-size:11px;color:'+rc+'">'+(u.runAdj>0?'+':'')+u.runAdj.toFixed(1)+'</td>'+
+      '<td style="font-size:11px">'+u.zone+'</td>'+
+      '<td style="font-family:var(--fm);font-size:11px">'+u.csRate+'%</td>'+
+      '<td style="font-size:11px;color:'+(u.favor.includes('Pitcher')?'var(--gn)':u.favor.includes('Hitter')?'var(--rd)':'var(--mu)')+'">'+u.favor+'</td>'+
+      '<td style="font-size:10px;color:var(--mu)">'+u.nrfi+'</td>'+
+      '<td style="font-size:10px;color:var(--mu)">'+u.ou+'</td>'+
+      '<td style="font-size:10px;color:var(--mu)">'+u.ko+'</td>';
+    tb.appendChild(tr);
+  });
+}
+
+function renderSources() {
+  var grid = document.getElementById('srcGrid');
+  grid.innerHTML = '';
+  SOURCES.forEach(function(s) {
+    var cc = s.cost==='free'?'c-free':s.cost==='free-tier'?'c-freet':'c-paid';
+    var cl = s.cost==='free'?'FREE':s.cost==='free-tier'?'FREE TIER':'PAID';
+    var vars = s.vars.map(function(v) {
+      return '<li>'+v+(s.auto?'<span class="src-auto">Auto</span>':'<span class="src-manual">Paste</span>')+'</li>';
+    }).join('');
+    var card = document.createElement('div');
+    card.className = 'src-card';
+    card.innerHTML =
+      '<div class="src-name">'+s.name+'</div>'+
+      '<div class="src-url">'+s.url+'</div>'+
+      '<span class="src-cost '+cc+'">'+cl+'</span>'+
+      '<ul class="src-vars">'+vars+'</ul>';
+    grid.appendChild(card);
+  });
+}
+
+function renderBvP() {
+  var tb = document.getElementById('bvpBody');
+  tb.innerHTML = '';
+  var hot=0, cold=0, ko=0, totalPa=0, cnt=0;
+  var games = USING_SAMPLE ? SAMPLE_GAMES : LIVE_GAMES;
+  games.forEach(function(g) {
+    if (!g.bvp || !g.bvp.length) return;
+    g.bvp.forEach(function(b) {
+      var sc = b.sig==='hot'?'cs':b.sig==='cold'?'cx':'cl';
+      var sig = b.sig==='hot'?'HOT':b.sig==='cold'?'COLD':'Neutral';
+      var imp = b.sig==='hot'?'YRFI / Over / lower KO line':b.sig==='cold'?'NRFI / Under / higher KO line':'No strong signal';
+      if (b.sig==='hot') hot++;
+      if (b.sig==='cold') cold++;
+      if (b.kpct>28&&b.pa>15) ko++;
+      totalPa+=b.pa; cnt++;
+      var kc = b.kpct>30?'var(--rd)':b.kpct<18?'var(--gn)':'var(--tx)';
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td style="font-family:var(--fh);font-size:13px;font-weight:800">'+g.awayP+'</td>'+
+        '<td style="font-family:var(--fh);font-size:13px;font-weight:800">'+b.hitter+'</td>'+
+        '<td><span class="pl p-ml">'+g.home+'</span></td>'+
+        '<td style="font-family:var(--fm)">'+b.pa+'</td>'+
+        '<td style="font-family:var(--fm);color:'+(b.sig==='hot'?'var(--gn)':b.sig==='cold'?'var(--rd)':'var(--tx)')+'">'+b.avg.toFixed(3)+'</td>'+
+        '<td style="font-family:var(--fm)">'+b.obp.toFixed(3)+'</td>'+
+        '<td style="font-family:var(--fm)">'+b.slg.toFixed(3)+'</td>'+
+        '<td style="font-family:var(--fm)">'+b.woba.toFixed(3)+'</td>'+
+        '<td style="font-family:var(--fm)">'+b.hr+'</td>'+
+        '<td style="font-family:var(--fm);color:'+kc+'">'+b.kpct+'%</td>'+
+        '<td style="font-family:var(--fm)">'+b.bbpct+'%</td>'+
+        '<td style="font-family:var(--fm)">'+b.iso.toFixed(3)+'</td>'+
+        '<td style="font-family:var(--fm)">'+b.xba.toFixed(3)+'</td>'+
+        '<td><span class="cf '+sc+'">'+sig+'</span></td>'+
+        '<td style="font-size:10px;color:var(--mu)">'+imp+'</td>';
+      tb.appendChild(tr);
+    });
+  });
+  document.getElementById('bvp-hot').textContent = hot;
+  document.getElementById('bvp-cold').textContent = cold;
+  document.getElementById('bvp-ko').textContent = ko;
+  document.getElementById('bvp-pa').textContent = cnt ? Math.round(totalPa/cnt) : 0;
+}
+
+function allPlays() {
+  var games = USING_SAMPLE ? SAMPLE_GAMES : LIVE_GAMES;
+  var out = [];
+  games.forEach(function(g) {
+    ['ml','ou','nrfi','ko'].forEach(function(t) {
+      var s = g.scores[t];
+      var tl = {ml:'ML',ou:'O/U',nrfi:'NRFI',ko:'KO'}[t];
+      out.push({game:g, type:tl, tkey:t, play:s.play, score:s.score, edge:s.edge, conf:s.conf, kf:s.factors[0].n+': '+s.factors[0].v});
+    });
+  });
+  return out.sort(function(a,b) { return b.score-a.score; });
+}
+
+function fp(type, btn) {
+  AF = type;
+  document.querySelectorAll('.fb').forEach(function(b) { b.classList.remove('on'); });
+  btn.classList.add('on');
+  renderPlays();
+}
+
+function renderPlays() {
+  var plays = allPlays();
+  var fil = plays.filter(function(p) {
+    if (AF==='ALL') return true;
+    if (AF==='STRONG') return p.conf==='STRONG';
+    return p.type===AF;
+  });
+  var strong = plays.filter(function(p) { return p.conf==='STRONG'; });
+  document.getElementById('s-strong').textContent = strong.length;
+  document.getElementById('s-edge').textContent = plays.length ? '+'+Math.max.apply(null, plays.map(function(p){return p.edge;})).toFixed(1)+'%' : '--';
+  var tb = document.getElementById('playsBody');
+  tb.innerHTML = '';
+  fil.forEach(function(p, i) {
+    var g = p.game;
+    var fc = {ML:'p-ml','O/U':'p-ou',NRFI:'p-nrfi',KO:'p-ko'}[p.type];
+    var cc = p.conf==='STRONG'?'cs':p.conf==='LEAN'?'cl':'cx';
+    var bc = p.conf==='STRONG'?'var(--gn)':p.conf==='LEAN'?'var(--am)':'var(--dm)';
+    var ec = p.edge>=5?'ep':p.edge<2.5?'en':'em';
+    var flags = '';
+    if (g.flags.bvp) flags += '<span class="fg fg-bvp">BvP</span>';
+    if (g.flags.platoon) flags += '<span class="fg fg-pl">Plat</span>';
+    if (g.flags.bullpenTired) flags += '<span class="fg fg-bf">Pen</span>';
+    if (g.flags.sharpMoney) flags += '<span class="fg fg-sh">Sharp</span>';
+    if (g.flags.injury) flags += '<span class="fg fg-inj">Inj</span>';
+    if (g.flags.veloFlag) flags += '<span class="fg fg-vl">Velo</span>';
+    if (g.flags.umpFlag) flags += '<span class="fg fg-ump">Ump</span>';
+    var tr = document.createElement('tr');
+    tr.className = 'dr';
+    (function(game, tkey) {
+      tr.onclick = function() { openModal(game, tkey); };
+    }(g, p.tkey));
+    tr.innerHTML =
+      '<td style="font-family:var(--fm);font-size:10px;color:var(--mu)">'+(i+1)+'</td>'+
+      '<td><div class="mn">'+g.away+' @ '+g.home+'</div><div class="mm">'+g.time+' | '+g.venue+(g.ump&&g.ump!=='TBD'?' | Ump: '+g.ump:'')+'</div></td>'+
+      '<td><span class="pl '+fc+'">'+p.type+'</span></td>'+
+      '<td style="font-family:var(--fh);font-size:13px;font-weight:800">'+p.play+'</td>'+
+      '<td><div class="sb2"><div class="sb2-bg"><div class="sb2-f" style="width:'+p.score+'%;background:'+bc+'"></div></div><span class="sn" style="color:'+bc+'">'+p.score+'</span></div></td>'+
+      '<td><span class="'+ec+'">+'+p.edge.toFixed(1)+'%</span></td>'+
+      '<td><span class="cf '+cc+'">'+p.conf+'</span></td>'+
+      '<td>'+(flags||'<span style="color:var(--dm);font-size:9px">--</span>')+'</td>'+
+      '<td style="font-size:10px;color:var(--mu);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.kf+'</td>';
+    tb.appendChild(tr);
+  });
+}
+
+function renderCards() {
+  var grid = document.getElementById('gcards');
+  grid.innerHTML = '';
+  var games = USING_SAMPLE ? SAMPLE_GAMES : LIVE_GAMES;
+  games.forEach(function(g) {
+    var sc = {ml:'var(--bl)',ou:'var(--pu)',nrfi:'var(--tl)',ko:'var(--am)'};
+    var sl = {ml:'ML',ou:'O/U',nrfi:'NRFI',ko:'KOs'};
+    var scH = '';
+    ['ml','ou','nrfi','ko'].forEach(function(t) {
+      var s = g.scores[t];
+      var star = s.conf==='STRONG'?'*':s.conf==='LEAN'?'+':'·';
+      scH += '<div class="gs"><span class="gs-l">'+sl[t]+'</span><span class="gs-v" style="color:'+sc[t]+'">'+star+' '+s.score+'</span></div>';
+    });
+    var flags = '';
+    if (g.flags.bvp) flags += '<span class="fg fg-bvp">BvP</span>';
+    if (g.flags.platoon) flags += '<span class="fg fg-pl">Platoon</span>';
+    if (g.flags.bullpenTired) flags += '<span class="fg fg-bf">Pen Tired</span>';
+    if (g.flags.sharpMoney) flags += '<span class="fg fg-sh">Sharp $</span>';
+    if (g.flags.injury) flags += '<span class="fg fg-inj">Injury</span>';
+    if (g.flags.veloFlag) flags += '<span class="fg fg-vl">Velo Watch</span>';
+    if (g.flags.umpFlag) flags += '<span class="fg fg-ump">Ump Edge</span>';
+    var lmC = g.lineMove.dir==='UP'?'var(--rd)':g.lineMove.dir==='DOWN'?'var(--gn)':'var(--mu)';
+    var lmS = g.lineMove.dir==='UP'?'UP':g.lineMove.dir==='DOWN'?'DOWN':'--';
+    var wxStr = g.wx.cond==='Dome' ? 'DOME' : g.wx.temp+'F | '+(g.wx.wind?g.wx.wind+' mph ':'')+g.wx.dir;
+    var card = document.createElement('div');
+    card.className = 'gc';
+    (function(game) { card.onclick = function() { openModal(game,'ml'); }; }(g));
+    card.innerHTML =
+      '<div class="gc-h"><span class="gc-ti">'+g.time+'</span><span class="gc-ve">'+g.venue+'</span></div>'+
+      '<div class="gc-tm">'+
+        '<div class="gc-t"><div class="gc-ab">'+g.away+'</div><div class="gc-p">'+g.awayP+'</div><div class="gc-hd">'+g.awayH+'</div></div>'+
+        '<div class="gc-vs"><div style="font-family:var(--fm);font-size:9px;color:var(--mu)">TOTAL</div>'+
+          '<div class="gc-tot">'+g.total+'</div>'+
+          '<div style="font-family:var(--fm);font-size:9px;color:'+lmC+'">'+lmS+(g.lineMove.dir!=='FLAT'?' from '+g.lineMove.open:'')+'</div></div>'+
+        '<div class="gc-t"><div class="gc-ab">'+g.home+'</div><div class="gc-p">'+g.homeP+'</div><div class="gc-hd">'+g.homeH+'</div></div>'+
+      '</div>'+
+      '<div class="gc-fl">'+(flags||'')+'</div>'+
+      '<div class="wx">'+
+        '<span class="wx-i">'+wxStr+'</span>'+
+        '<span class="wx-i">PF '+g.parkFactor.toFixed(2)+'</span>'+
+        '<span class="wx-i" style="color:'+(Math.min(g.bullpenRest.away,g.bullpenRest.home)<1.5?'var(--am)':'var(--mu)')+'">Pen '+g.bullpenRest.away+'/'+g.bullpenRest.home+'d</span>'+
+      '</div>'+
+      '<div class="gc-sc">'+scH+'</div>';
+    grid.appendChild(card);
+  });
+}
+
+function renderTracker() {
+  var types = [{k:'ML',c:'var(--bl)'},{k:'O/U',c:'var(--pu)'},{k:'NRFI',c:'var(--tl)'},{k:'KOs',c:'var(--am)'}];
+  var row = document.getElementById('tyrow');
+  row.innerHTML = '';
+  types.forEach(function(t) {
+    var d = document.createElement('div');
+    d.className = 'tycard';
+    d.innerHTML = '<div class="tclb">'+t.k+'</div>'+
+      '<div style="font-family:var(--fh);font-size:20px;font-weight:800;color:var(--dm)">0-0</div>'+
+      '<div class="rr"><div class="rb"><div class="rf" style="width:0%;background:'+t.c+'"></div></div>'+
+      '<span style="font-family:var(--fm);font-size:9px;color:var(--mu)">0% win</span></div>';
+    row.appendChild(d);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════
+function openModal(game, tkey) {
+  var tLabels = {ml:'Moneyline',ou:'Over / Under',nrfi:'NRFI / YRFI',ko:'Pitcher strikeouts'};
+  var tColors = {ml:'var(--bl)',ou:'var(--pu)',nrfi:'var(--tl)',ko:'var(--am)'};
+  document.getElementById('mtitle').textContent = game.away + ' @ ' + game.home + ' | ' + game.time;
+  var lmC = game.lineMove.dir==='UP'?'var(--rd)':game.lineMove.dir==='DOWN'?'var(--gn)':'var(--mu)';
+
+  var envItems = [
+    ['Temp', game.wx.temp+'F', game.wx.temp<50?'var(--bl)':game.wx.temp>84?'var(--rd)':'var(--tx)'],
+    ['Wind', game.wx.wind ? game.wx.wind+' mph' : 'Dome', game.wx.wind>12?'var(--am)':'var(--tx)'],
+    ['Direction', game.wx.dir, 'var(--mu)'],
+    ['Park factor', ''+game.parkFactor.toFixed(2), game.parkFactor>1.05?'var(--rd)':game.parkFactor<0.93?'var(--gn)':'var(--tx)'],
+    ['Umpire', game.ump, game.flags.umpFlag?'var(--ac)':'var(--tx)'],
+    ['Line move', game.lineMove.open+' to '+game.lineMove.current, lmC],
+    ['Pen rest', game.bullpenRest.away+'d / '+game.bullpenRest.home+'d', Math.min(game.bullpenRest.away,game.bullpenRest.home)<1.5?'var(--am)':'var(--tx)']
+  ];
+
+  var html =
+    '<div class="ms"><div class="msl">Pitching matchup</div>'+
+    '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center">'+
+      '<div><div style="font-family:var(--fh);font-size:15px;font-weight:800">'+game.away+'</div>'+
+      '<div style="font-size:11px;color:var(--mu)">'+game.awayP+' ('+game.awayH+')</div></div>'+
+      '<div style="font-family:var(--fm);font-size:10px;color:var(--dm);text-align:center">VS</div>'+
+      '<div style="text-align:right"><div style="font-family:var(--fh);font-size:15px;font-weight:800">'+game.home+'</div>'+
+      '<div style="font-size:11px;color:var(--mu)">'+game.homeP+' ('+game.homeH+')</div></div>'+
+    '</div></div>'+
+    '<div class="ms"><div class="msl">Environment</div>'+
+    '<div style="display:flex;gap:7px;flex-wrap:wrap">'+
+    envItems.map(function(a) {
+      return '<div style="background:var(--sf2);border-radius:5px;padding:7px 10px">'+
+        '<div style="font-family:var(--fm);font-size:9px;color:var(--mu)">'+a[0]+'</div>'+
+        '<div style="font-family:var(--fm);font-size:12px;color:'+(a[2]||'var(--tx)')+';margin-top:2px">'+a[1]+'</div></div>';
+    }).join('')+'</div></div>';
+
+  ['ml','ou','nrfi','ko'].forEach(function(t) {
+    var s = game.scores[t];
+    var c = tColors[t];
+    var cc = s.conf==='STRONG'?'cs':s.conf==='LEAN'?'cl':'cx';
+    html += '<div class="ms">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
+        '<div style="font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.11em;color:var(--mu)">'+tLabels[t]+'</div>'+
+        '<div style="display:flex;align-items:center;gap:7px">'+
+          '<span style="font-family:var(--fh);font-size:13px;font-weight:800;color:'+c+'">'+s.play+'</span>'+
+          '<span style="font-family:var(--fm);font-size:10px;color:var(--gn)">+'+s.edge.toFixed(1)+'% edge</span>'+
+          '<span class="cf '+cc+'">'+s.conf+'</span>'+
+        '</div></div>'+
+      s.factors.map(function(f) {
+        return '<div class="fct"><span class="fn">'+f.n+'</span>'+
+          '<div style="display:flex;align-items:center;gap:6px;margin-left:8px">'+
+          '<div class="fbw"><div class="fbr" style="width:'+f.pct+'%;background:'+c+'"></div></div>'+
+          '<span class="fv" style="color:'+c+';min-width:54px;text-align:right">'+f.v+'</span></div></div>';
+      }).join('')+'</div>';
+  });
+
+  if (game.bvp && game.bvp.length) {
+    html += '<div class="ms"><div class="msl">Batter vs Pitcher history ('+game.awayP+')</div>'+
+      game.bvp.map(function(b) {
+        var sc = b.sig==='hot'?'cs':b.sig==='cold'?'cx':'cl';
+        var kc = b.kpct>30?'var(--rd)':b.kpct<18?'var(--gn)':'var(--mu)';
+        return '<div class="bvpr"><div class="bvpn">'+b.hitter+'</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+          '<span style="font-family:var(--fm);font-size:10px;color:'+(b.sig==='hot'?'var(--gn)':b.sig==='cold'?'var(--rd)':'var(--mu)')+'">'+
+          b.pa+' PA | '+b.avg.toFixed(3)+' AVG | '+b.slg.toFixed(3)+' SLG | wOBA '+b.woba.toFixed(3)+'</span>'+
+          '<span style="font-family:var(--fm);font-size:10px;color:'+kc+'">K% '+b.kpct+'%</span>'+
+          '<span class="cf '+sc+'">'+b.sig.toUpperCase()+'</span></div></div>';
+      }).join('')+'</div>';
+  }
+
+  document.getElementById('mbody').innerHTML = html;
+  document.getElementById('mo').classList.add('open');
+}
+
+function closeMo(e) { if (e.target===document.getElementById('mo')) closeMoDirect(); }
+function closeMoDirect() { document.getElementById('mo').classList.remove('open'); }
+function showLogModal() { alert('Bet logging activates on Opening Day March 26, 2026!'); }
+
+// ═══════════════════════════════════════════════
+// VIEW SWITCHING
+// ═══════════════════════════════════════════════
+function sw(name, el) {
+  document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('on'); });
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('on'); });
+  document.getElementById('view-'+name).classList.add('on');
+  el.classList.add('on');
+}
+
+// ═══════════════════════════════════════════════
+// COUNTDOWN
+// ═══════════════════════════════════════════════
+function tick() {
+  var od = new Date('2026-03-26T13:00:00');
+  var now = new Date();
+  var diff = od - now;
+  var el = document.getElementById('countdown');
+  if (!el) return;
+  if (diff <= 0) { el.textContent = 'Season is LIVE'; return; }
+  var d = Math.floor(diff/86400000);
+  var h = Math.floor((diff%86400000)/3600000);
+  var m = Math.floor((diff%3600000)/60000);
+  el.textContent = d+'d '+h+'h '+m+'m until first pitch';
+}
+
+// ═══════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════
+function renderAll() {
+  renderPlays();
+  renderCards();
+  renderBvP();
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function() {
+  var now = new Date();
+  document.getElementById('dateBadge').textContent = now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  renderParks();
+  renderUmps();
+  renderSources();
+  renderTracker();
+  tick();
+  setInterval(tick, 60000);
+  checkSetup();
+  // Load live data — falls back to sample automatically on error
+  LIVE_GAMES = SAMPLE_GAMES;
+  USING_SAMPLE = true;
+  renderAll();
+  loadAll();
+  // Auto-refresh every 30 minutes
+  setInterval(loadAll, 30*60*1000);
+});
+</script>
+</body>
+</html>
