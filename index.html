@@ -206,6 +206,7 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
   <div class="logo">&#9918; Diamond Edge <span class="logo-sub">MLB 2026 Betting Intelligence</span></div>
   <div class="hdr-r">
     <div class="bdg" id="dateBadge"></div>
+    <div class="bdg" id="bvp-status" style="display:none">BvP loading...</div>
     <div class="bdg bdg-sample" id="sampleBadge">Sample Data</div>
     <div class="bdg bdg-live" id="liveBadge">&#9679; Live</div>
     <div class="bdg bdg-err" id="errBadge">API Error</div>
@@ -689,6 +690,7 @@ function buildGameFromAPI(g, pitcherStats, wxData) {
     homeP: homePName, homeH: 'RHP',
     total: 8.5, parkFactor: pf, ump: 'TBD',
     wx: wx,
+    _raw: g,
     flags: {bvp:false, platoon:false, bullpenTired:false, sharpMoney:false, injury:false, veloFlag:false, umpFlag:false},
     bullpenRest: {away:2.5, home:2.5},
     lineMove: {open:8.5, current:8.5, dir:'FLAT'},
@@ -700,6 +702,140 @@ function buildGameFromAPI(g, pitcherStats, wxData) {
     },
     bvp: []
   };
+}
+
+// ═══════════════════════════════════════════════
+// BVP AUTO-FETCH — MLB Stats API vsPlayer splits
+// ═══════════════════════════════════════════════
+
+function sleep(ms) {
+  return new Promise(function(res) { setTimeout(res, ms); });
+}
+
+async function fetchRoster(teamId) {
+  var url = CFG.MLB_BASE + '/teams/' + teamId + '/roster?rosterType=active&hydrate=person';
+  try {
+    var data = await fetchJSON(url);
+    return (data.roster || []).map(function(r) {
+      return {
+        id: (r.person || {}).id,
+        name: (r.person || {}).fullName || '',
+        pos: (r.position || {}).abbreviation || ''
+      };
+    }).filter(function(p) { return p.id && p.pos !== 'P'; });
+  } catch(e) {
+    return [];
+  }
+}
+
+async function fetchBvPSplit(pitcherId, batterId) {
+  var url = CFG.MLB_BASE + '/people/' + pitcherId + '/stats' +
+    '?stats=vsPlayer&group=pitching&opposingPlayerId=' + batterId;
+  try {
+    var data = await fetchJSON(url);
+    var stats = data.stats || [];
+    var splits = [];
+    stats.forEach(function(s) {
+      (s.splits || []).forEach(function(sp) { splits.push(sp); });
+    });
+    if (!splits.length) return null;
+    var st = splits[0].stat || {};
+    var batter = splits[0].batter || {};
+    var pa = parseInt(st.plateAppearances) || 0;
+    if (pa < 8) return null;
+    var avg = parseFloat(st.avg) || 0;
+    var obp = parseFloat(st.obp) || 0;
+    var slg = parseFloat(st.slg) || 0;
+    var hr  = parseInt(st.homeRuns) || 0;
+    var so  = parseInt(st.strikeOuts) || 0;
+    var bb  = parseInt(st.baseOnBalls) || 0;
+    var ab  = parseInt(st.atBats) || pa;
+    var kpct  = ab > 0 ? Math.round(so / pa * 100) : 0;
+    var bbpct = pa > 0 ? Math.round(bb / pa * 100) : 0;
+    var iso   = parseFloat((slg - avg).toFixed(3));
+    var woba  = parseFloat(((bb * 0.69 + (ab > 0 ? (st.hits || 0) - (st.doubles || 0) - (st.triples || 0) - hr : 0) * 0.888 + (st.doubles || 0) * 1.271 + (st.triples || 0) * 1.616 + hr * 2.101) / (ab + bb + 0.001)).toFixed(3));
+    var sig = 'neutral';
+    if (pa >= 10) {
+      if (woba > 0.370 || avg > 0.300) sig = 'hot';
+      else if (woba < 0.250 || kpct > 35) sig = 'cold';
+    }
+    return {
+      hitter: batter.fullName || ('Player ' + batterId),
+      pa: pa, avg: avg, obp: obp, slg: slg,
+      woba: isNaN(woba) ? 0 : woba,
+      hr: hr, kpct: kpct, bbpct: bbpct,
+      iso: isNaN(iso) ? 0 : iso, xba: avg,
+      sig: sig
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+async function loadBvPForGames(games) {
+  var BVP_STATUS = document.getElementById('bvp-status');
+  if (BVP_STATUS) BVP_STATUS.textContent = 'Loading BvP...';
+
+  for (var i = 0; i < games.length; i++) {
+    var game = games[i];
+    var rawGame = game._raw || {};
+    var awayTeamId = ((rawGame.teams || {}).away || {}).team
+      ? rawGame.teams.away.team.id : null;
+    var homeTeamId = ((rawGame.teams || {}).home || {}).team
+      ? rawGame.teams.home.team.id : null;
+    var awayPitcherId = ((rawGame.teams || {}).away || {}).probablePitcher
+      ? rawGame.teams.away.probablePitcher.id : null;
+    var homePitcherId = ((rawGame.teams || {}).home || {}).probablePitcher
+      ? rawGame.teams.home.probablePitcher.id : null;
+
+    if (!awayPitcherId && !homePitcherId) continue;
+
+    var awayBatters = awayTeamId ? await fetchRoster(awayTeamId) : [];
+    var homeBatters = homeTeamId ? await fetchRoster(homeTeamId) : [];
+    await sleep(150);
+
+    var bvpResults = [];
+
+    // Away batters vs home starter (top 5 hitters by roster order)
+    if (homePitcherId && awayBatters.length) {
+      var top = awayBatters.slice(0, 5);
+      for (var j = 0; j < top.length; j++) {
+        var result = await fetchBvPSplit(homePitcherId, top[j].id);
+        if (result) bvpResults.push(result);
+        await sleep(120);
+      }
+    }
+
+    // Home batters vs away starter
+    if (awayPitcherId && homeBatters.length) {
+      var topHome = homeBatters.slice(0, 5);
+      for (var k = 0; k < topHome.length; k++) {
+        var res2 = await fetchBvPSplit(awayPitcherId, topHome[k].id);
+        if (res2) bvpResults.push(res2);
+        await sleep(120);
+      }
+    }
+
+    // Sort: hot first, then cold, then neutral — only keep signal rows
+    bvpResults.sort(function(a, b) {
+      var order = {hot: 0, cold: 1, neutral: 2};
+      return order[a.sig] - order[b.sig];
+    });
+
+    game.bvp = bvpResults.filter(function(r) { return r.sig !== 'neutral'; })
+      .concat(bvpResults.filter(function(r) { return r.sig === 'neutral'; }))
+      .slice(0, 8);
+
+    // Set BvP flags on game
+    var hasHot  = bvpResults.some(function(r) { return r.sig === 'hot'; });
+    var hasCold = bvpResults.some(function(r) { return r.sig === 'cold'; });
+    if (hasHot || hasCold) game.flags.bvp = true;
+  }
+
+  if (BVP_STATUS) BVP_STATUS.textContent = 'BvP loaded';
+  renderBvP();
+  renderPlays();
+  renderCards();
 }
 
 async function loadAll() {
@@ -741,6 +877,15 @@ async function loadAll() {
     document.getElementById('s-games').textContent = LIVE_GAMES.length;
 
     renderAll();
+
+    // BvP loads in background — non-blocking, updates when ready
+    var bvpBadge = document.getElementById('bvp-status');
+    if (bvpBadge) bvpBadge.style.display = 'inline-block';
+    loadBvPForGames(LIVE_GAMES).catch(function(e) {
+      console.warn('BvP fetch failed silently:', e.message);
+    }).finally(function() {
+      if (bvpBadge) bvpBadge.style.display = 'none';
+    });
 
   } catch(err) {
     // Fall back to sample data gracefully
