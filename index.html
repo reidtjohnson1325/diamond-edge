@@ -262,16 +262,7 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
 
 <!-- TODAY -->
 <div class="view on" id="view-today">
-  <div class="setup-banner" id="setupBanner">
-    <div class="setup-title">Setup: Add Your Free Weather API Key</div>
-    <div class="setup-step"><span class="setup-step-num">1</span>Go to openweathermap.org/api and click "Get API key" — it's free, takes 30 seconds</div>
-    <div class="setup-step"><span class="setup-step-num">2</span>Copy your key and paste it below — saved in your browser forever</div>
-    <div class="setup-step"><span class="setup-step-num">3</span>MLB schedule, pitchers, and stats pull automatically with no key needed</div>
-    <div class="setup-key-input">
-      <input type="text" id="wxKeyInput" placeholder="Paste your OpenWeatherMap API key here..." />
-      <button onclick="saveWxKey()">Save Key</button>
-    </div>
-  </div>
+
   <div class="sgrid">
     <div class="sc"><div class="lb">Strong plays</div><div class="vl" id="s-strong" style="color:var(--ac)">0</div><div class="sb">High confidence today</div></div>
     <div class="sc"><div class="lb">Best edge</div><div class="vl" id="s-edge" style="color:var(--gn)">--</div><div class="sb">vs. implied odds</div></div>
@@ -444,8 +435,7 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
 // ═══════════════════════════════════════════════
 var CFG = {
   MLB_BASE: 'https://statsapi.mlb.com/api/v1',
-  WX_BASE:  'https://api.openweathermap.org/data/2.5/weather',
-  WX_KEY:   localStorage.getItem('diamond_wx_key') || '',
+  WX_BASE:  'https://api.open-meteo.com/v1/forecast',
   SPORT_ID: 1
 };
 
@@ -548,7 +538,7 @@ var UMPS = [
 var SOURCES = [
   {name:'MLB Stats API',url:'statsapi.mlb.com',cost:'free',auto:true,vars:['Daily schedule and game times','Confirmed starting pitchers','Season pitcher stats (ERA, K, BB, IP)','Season batter stats (AVG, OBP, SLG)','Team records and run differentials','Roster and injury report data']},
   {name:'Baseball Savant',url:'baseballsavant.mlb.com',cost:'free',auto:true,vars:['xFIP, xERA, xBA, xSLG, xwOBA','SwStr% swinging strike rate','Pitch velocity and movement trends','Pitch mix percentages by type','Barrel rate and hard hit rate','Exit velocity and launch angle','1st-inning ERA splits']},
-  {name:'OpenWeatherMap API',url:'openweathermap.org/api',cost:'free',auto:true,vars:['Wind speed in mph at game time','Wind direction (in / out / cross)','Temperature at first pitch','Humidity percentage','Precipitation probability','Hourly forecast through 9th inning']},
+  {name:'Open-Meteo Weather API',url:'open-meteo.com',cost:'free',auto:true,vars:['Wind speed in mph at game time','Wind direction degrees converted to compass','Temperature at first pitch (Fahrenheit)','Relative humidity percentage','Weather condition code (clear / rain / fog / snow)','No API key required — completely free forever']},
   {name:'The Odds API',url:'the-odds-api.com',cost:'free-tier',auto:true,vars:['Opening moneyline odds','Current moneyline with line movement','Opening and current run total (O/U)','Implied win probability per side','Sharp money line movement flags','Consensus public betting percentage']},
   {name:'FanGraphs',url:'fangraphs.com',cost:'free',auto:false,vars:['Park factor tables 5-year average','wRC+ by platoon vs L and R','Bullpen ERA, FIP, and WHIP','K% and BB% splits by handedness','Velocity trends over season','Team offensive and defensive WAR']},
   {name:'Rotowire Lineups',url:'rotowire.com/baseball',cost:'free',auto:false,vars:['Confirmed daily batting orders','Late scratches and lineup changes','Batting order positions 1 through 9','Pitcher confirmed game status','Expected bullpen usage notes']},
@@ -678,11 +668,16 @@ function loadPitcherStats(personId) {
 }
 
 function loadWeather(venue) {
-  if (!CFG.WX_KEY) return Promise.resolve(null);
   var coords = STADIUM_COORDS[venue];
   if (!coords) return Promise.resolve(null);
-  var url = CFG.WX_BASE + '?lat=' + coords.lat + '&lon=' + coords.lon + '&appid=' + CFG.WX_KEY + '&units=imperial';
-  return fetchJSON(url);
+  var url = CFG.WX_BASE +
+    '?latitude=' + coords.lat +
+    '&longitude=' + coords.lon +
+    '&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,relative_humidity_2m' +
+    '&wind_speed_unit=mph' +
+    '&temperature_unit=fahrenheit' +
+    '&timezone=auto';
+  return fetchJSON(url).catch(function() { return null; });
 }
 
 function buildGameFromAPI(g, pitcherStats, wxData) {
@@ -711,17 +706,29 @@ function buildGameFromAPI(g, pitcherStats, wxData) {
   // Park factor lookup
   var park = PARKS.filter(function(p) { return p.team === homeAbbr; })[0] || {run:1.0,hr:1.0};
 
-  // Weather processing
-  var wx = {temp:70, wind:0, dir:'N/A', cond:'Unknown'};
-  if (wxData && wxData.main) {
-    wx.temp = Math.round(wxData.main.temp);
-    wx.wind = Math.round((wxData.wind || {}).speed || 0);
-    wx.cond = ((wxData.weather || [])[0] || {}).main || 'Clear';
-    // Convert wind degrees to direction label
-    var wdeg = (wxData.wind || {}).deg || 0;
+  // Weather processing — Open-Meteo (no key required)
+  var wx = {temp:70, wind:0, dir:'N/A', cond:'Unknown', humidity:50};
+  if (wxData && wxData.current) {
+    var cur = wxData.current;
+    wx.temp = Math.round(cur.temperature_2m || 70);
+    wx.wind = Math.round(cur.wind_speed_10m || 0);
+    wx.humidity = Math.round(cur.relative_humidity_2m || 50);
+    // Wind direction degrees to compass label
+    var wdeg = cur.wind_direction_10m || 0;
     var dirs = ['N','NE','E','SE','S','SW','W','NW'];
     wx.dir = dirs[Math.round(wdeg/45)%8];
-    if (park.roof === 'Dome') { wx.wind = 0; wx.dir = 'Dome'; wx.cond = 'Dome'; }
+    // Weather code to condition label
+    var wc = cur.weather_code || 0;
+    wx.cond = wc === 0 ? 'Clear' :
+              wc <= 3  ? 'Partly Cloudy' :
+              wc <= 48 ? 'Foggy' :
+              wc <= 67 ? 'Rain' :
+              wc <= 77 ? 'Snow' :
+              wc <= 82 ? 'Showers' :
+              wc <= 99 ? 'Thunderstorm' : 'Clear';
+    if (park.roof === 'Dome' || park.roof === 'Retractable') {
+      wx.wind = 0; wx.dir = 'Dome'; wx.cond = 'Dome';
+    }
   }
 
   // Compute simple model scores from available data
@@ -968,23 +975,7 @@ async function loadAll() {
   }
 }
 
-// ═══════════════════════════════════════════════
-// WEATHER KEY SETUP
-// ═══════════════════════════════════════════════
-function saveWxKey() {
-  var key = document.getElementById('wxKeyInput').value.trim();
-  if (!key) return;
-  localStorage.setItem('diamond_wx_key', key);
-  CFG.WX_KEY = key;
-  document.getElementById('setupBanner').classList.remove('show');
-  loadAll();
-}
-
-function checkSetup() {
-  if (!CFG.WX_KEY) {
-    document.getElementById('setupBanner').classList.add('show');
-  }
-}
+// Weather: Open-Meteo (no API key needed)
 
 // ═══════════════════════════════════════════════
 // LINEUP PASTE PARSER
@@ -1725,7 +1716,6 @@ document.addEventListener('DOMContentLoaded', function() {
   renderTracker();
   tick();
   setInterval(tick, 60000);
-  checkSetup();
   // Load live data — falls back to sample automatically on error
   LIVE_GAMES = SAMPLE_GAMES;
   USING_SAMPLE = true;
