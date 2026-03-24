@@ -847,26 +847,27 @@ async function fetchPitcherFirstInnStats(personId) {
 async function fetchTeamStats(teamId) {
   if (!teamId) return null;
   var year = new Date().getFullYear();
-  // Try regular season first, fall back to spring training if 404
-  var gameTypes = ['R', 'S'];
-  for (var gi = 0; gi < gameTypes.length; gi++) {
-    var url = CFG.MLB_BASE + '/teams/' + teamId +
-      '/stats?stats=season&group=hitting&season=' + year + '&gameType=' + gameTypes[gi];
+  // Try without gameType first (works for both regular + spring)
+  // Then try explicit gameType=R, then S
+  var urls = [
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + year,
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + year + '&gameType=R',
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + year + '&gameType=S'
+  ];
+  for (var ui = 0; ui < urls.length; ui++) {
     try {
-      var data = await fetchJSON(url);
+      var data = await fetchJSON(urls[ui]);
       var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
       var s = st.stat || {};
       var pa = parseFloat(s.plateAppearances||1) || 1;
-      if (pa < 5) continue; // not enough data, try next game type
+      if (pa < 5) continue;
+      var avg = parseFloat(s.avg||'.250'), slg = parseFloat(s.slg||'.400'), obp = parseFloat(s.obp||'.320');
       return {
-        avg:    parseFloat(s.avg||'.250'),
-        obp:    parseFloat(s.obp||'.320'),
-        slg:    parseFloat(s.slg||'.400'),
-        ops:    parseFloat(s.ops||'.720'),
-        woba:   parseFloat(s.obp||'.320') * 0.9 + parseFloat(s.slg||'.400') * 0.3,
-        kpct:   parseFloat(s.strikeOuts||0) / pa,
-        bbpct:  parseFloat(s.baseOnBalls||0) / pa,
-        iso:    Math.max(0, parseFloat(s.slg||'.400') - parseFloat(s.avg||'.250')),
+        avg: avg, obp: obp, slg: slg, ops: parseFloat(s.ops||'.720'),
+        woba: obp * 0.9 + slg * 0.3,
+        kpct: parseFloat(s.strikeOuts||0) / pa,
+        bbpct: parseFloat(s.baseOnBalls||0) / pa,
+        iso: Math.max(0, slg - avg),
         runsPerGame: parseFloat(s.runs||0) / Math.max(1, parseFloat(s.gamesPlayed||1))
       };
     } catch(e) { continue; }
@@ -878,23 +879,22 @@ async function fetchTeamPlatoonStats(teamId, vsHand) {
   if (!teamId) return null;
   var sitCode = vsHand === 'R' ? 'vr' : 'vl';
   var year = new Date().getFullYear();
-  var gameTypes = ['R', 'S'];
-  for (var gi = 0; gi < gameTypes.length; gi++) {
-    var url = CFG.MLB_BASE + '/teams/' + teamId +
-      '/stats?stats=statSplits&group=hitting&season=' + year +
-      '&sitCodes=' + sitCode + '&gameType=' + gameTypes[gi];
+  var urls = [
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=statSplits&group=hitting&season=' + year + '&sitCodes=' + sitCode,
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=statSplits&group=hitting&season=' + year + '&sitCodes=' + sitCode + '&gameType=R',
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=statSplits&group=hitting&season=' + year + '&sitCodes=' + sitCode + '&gameType=S'
+  ];
+  for (var ui = 0; ui < urls.length; ui++) {
     try {
-      var data = await fetchJSON(url);
+      var data = await fetchJSON(urls[ui]);
       var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
       var s = st.stat || {};
       var pa = parseFloat(s.plateAppearances||1)||1;
       if (pa < 5) continue;
+      var avg = parseFloat(s.avg||'.250'), slg = parseFloat(s.slg||'.400');
       return {
-        ops:  parseFloat(s.ops||'.720'),
-        obp:  parseFloat(s.obp||'.320'),
-        slg:  parseFloat(s.slg||'.400'),
-        kpct: parseFloat(s.strikeOuts||0)/pa,
-        iso:  Math.max(0,parseFloat(s.slg||'.400')-parseFloat(s.avg||'.250'))
+        ops: parseFloat(s.ops||'.720'), obp: parseFloat(s.obp||'.320'), slg: slg,
+        kpct: parseFloat(s.strikeOuts||0)/pa, iso: Math.max(0, slg - avg)
       };
     } catch(e) { continue; }
   }
@@ -904,21 +904,19 @@ async function fetchTeamPlatoonStats(teamId, vsHand) {
 async function fetchBullpenStats(teamId) {
   if (!teamId) return null;
   var year = new Date().getFullYear();
-  var gameTypes = ['R', 'S'];
-  for (var gi = 0; gi < gameTypes.length; gi++) {
-    var url = CFG.MLB_BASE + '/teams/' + teamId +
-      '/stats?stats=season&group=pitching&season=' + year + '&gameType=' + gameTypes[gi];
+  var urls = [
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + year,
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + year + '&gameType=R',
+    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + year + '&gameType=S'
+  ];
+  for (var ui = 0; ui < urls.length; ui++) {
     try {
-      var data = await fetchJSON(url);
+      var data = await fetchJSON(urls[ui]);
       var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
       var s = st.stat || {};
       var ip = parseFloat(s.inningsPitched||0)||0;
       if (ip < 5) continue;
-      return {
-        era:  parseFloat(s.era||'4.00'),
-        whip: parseFloat(s.whip||'1.25'),
-        ip:   ip
-      };
+      return { era: parseFloat(s.era||'4.00'), whip: parseFloat(s.whip||'1.25'), ip: ip };
     } catch(e) { continue; }
   }
   return null;
@@ -1084,7 +1082,7 @@ function scoreGame(awayData, homeData, wx, park, ump) {
   var mlPlay  = homeFavored ? homeData.abbr + ' ML' : awayData.abbr + ' ML';
   var mlEdge  = parseFloat(Math.abs(mlRaw - 0.50) * 20).toFixed(1);
   var mlFactors = [
-    {n: homeSPp.overall > awySPp.overall ? homeData.abbr+' SP edge (xFIP)' : awayData.abbr+' SP edge (xFIP)',
+    {n: homSPp.overall > awySPp.overall ? homeData.abbr+' SP edge (xFIP)' : awayData.abbr+' SP edge (xFIP)',
      v: (homSPp.overall > awySPp.overall ? homSP : awySP) ? ((homSPp.overall > awySPp.overall ? homSP : awySP).xfip||4.0).toFixed(2) : 'N/A',
      pct: Math.round(Math.max(homSPp.overall, awySPp.overall)*100)},
     {n:'SP K-BB% edge', v: (homSPp.overall>awySPp.overall?homSP:awySP) ? (((homSPp.overall>awySPp.overall?homSP:awySP).kbb||0)*100).toFixed(1)+'%':'N/A', pct:Math.round(Math.max(homSPp.kbb,awySPp.kbb)*100)},
@@ -1228,6 +1226,9 @@ function buildGameFromAPI(g, wx) {
   var homeTeam= home.team  || {};
   var awayAbbr= awayTeam.abbreviation || '???';
   var homeAbbr= homeTeam.abbreviation || '???';
+  // For spring training, use parentOrgId if available (regular season team ID)
+  var awayTeamId = awayTeam.parentOrgId || awayTeam.id;
+  var homeTeamId = homeTeam.parentOrgId || homeTeam.id;
   var awayPitcher = away.probablePitcher || {};
   var homePitcher = home.probablePitcher || {};
   var venue = (g.venue || {}).name || 'TBD';
@@ -1253,7 +1254,7 @@ function buildGameFromAPI(g, wx) {
   return {
     id: g.gamePk,
     away: awayAbbr, home: homeAbbr,
-    awayTeamId: awayTeam.id, homeTeamId: homeTeam.id,
+    awayTeamId: awayTeamId, homeTeamId: homeTeamId,
     awayPitcherId: awayPitcher.id, homePitcherId: homePitcher.id,
     awayP: awayPitcher.fullName||'TBD', awayH:'RHP',
     homeP: homePitcher.fullName||'TBD', homeH:'RHP',
