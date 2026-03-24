@@ -685,7 +685,12 @@ function todayStr() {
 }
 
 function fetchJSON(url) {
-  return fetch(url).then(function(r) {
+  var opts = {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+    mode: 'cors'
+  };
+  return fetch(url, opts).then(function(r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
   });
@@ -702,12 +707,19 @@ async function loadSchedule() {
       data._sportType = 'Regular Season';
       return data;
     }
-  } catch(e) {}
+  } catch(e) { console.warn('Regular season fetch failed:', e.message); }
   // No regular season games — try spring training (sportId=17)
   var stUrl = CFG.MLB_BASE + '/schedule?sportId=17&date=' + todayStr() + '&hydrate=' + hydrate + '&language=en';
-  var stData = await fetchJSON(stUrl);
-  stData._sportType = 'Spring Training';
-  return stData;
+  try {
+    var stData = await fetchJSON(stUrl);
+    var stGames = ((stData.dates || [])[0] || {}).games || [];
+    if (stGames.length > 0) {
+      stData._sportType = 'Spring Training';
+      return stData;
+    }
+  } catch(e) { console.warn('Spring training fetch failed:', e.message); }
+  // Both failed — throw to trigger sample data fallback
+  throw new Error('No games today');
 }
 
 // ── LIVE DATA FETCH FUNCTIONS ────────────────────────────────────
@@ -750,72 +762,9 @@ async function fetchPitcherFirstInnStats(personId) {
   } catch(e){ return null; }
 }
 
-async function fetchTeamStats(teamId) {
-  if (!teamId) return null;
-  var url = CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + new Date().getFullYear();
-  try {
-    var data = await fetchJSON(url);
-    var s = ((((data.stats||[])[0]||{}).splits)||[])[0]||{};
-    var st= s.stat||{};
-    var pa= parseFloat(st.plateAppearances||1)||1;
-    var avg=parseFloat(st.avg||'.250'), slg=parseFloat(st.slg||'.400'), obp=parseFloat(st.obp||'.320');
-    return { avg:avg, obp:obp, slg:slg, ops:parseFloat(st.ops||'.720'),
-             kpct:parseFloat(st.strikeOuts||0)/pa, bbpct:parseFloat(st.baseOnBalls||0)/pa,
-             iso:Math.max(0,slg-avg), runsPerGame:parseFloat(st.runs||0)/Math.max(1,parseFloat(st.gamesPlayed||1)) };
-  } catch(e){ return null; }
-}
+// [duplicate fetch functions removed — see scoring engine section below]
 
-async function fetchTeamPlatoonStats(teamId, vsHand) {
-  if (!teamId) return null;
-  var url = CFG.MLB_BASE + '/teams/' + teamId +
-    '/stats?stats=statSplits&group=hitting&season=' + new Date().getFullYear() +
-    '&sitCodes=' + (vsHand==='R'?'vr':'vl');
-  try {
-    var data = await fetchJSON(url);
-    var s = ((((data.stats||[])[0]||{}).splits)||[])[0]||{};
-    var st= s.stat||{};
-    var pa= parseFloat(st.plateAppearances||1)||1;
-    var avg=parseFloat(st.avg||'.250'),slg=parseFloat(st.slg||'.400'),obp=parseFloat(st.obp||'.320');
-    return { ops:parseFloat(st.ops||'.720'), obp:obp, slg:slg,
-             kpct:parseFloat(st.strikeOuts||0)/pa, iso:Math.max(0,slg-avg) };
-  } catch(e){ return null; }
-}
-
-async function fetchBullpenStats(teamId) {
-  if (!teamId) return null;
-  var url = CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + new Date().getFullYear();
-  try {
-    var data = await fetchJSON(url);
-    var s = ((((data.stats||[])[0]||{}).splits)||[])[0]||{};
-    var st= s.stat||{};
-    return { era:parseFloat(st.era||'4.00'), whip:parseFloat(st.whip||'1.25'),
-             ip:parseFloat(st.inningsPitched||1)||1 };
-  } catch(e){ return null; }
-}
-
-async function fetchRecentGameLog(teamId) {
-  if (!teamId) return {runDiff:0,last7W:0,last7L:0,bullpenIPLast3:0};
-  var now=new Date(), past=new Date(now-7*24*60*60*1000);
-  var fmt=function(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
-  var url = CFG.MLB_BASE + '/schedule?sportId=1&teamId='+teamId+'&startDate='+fmt(past)+'&endDate='+fmt(now)+'&hydrate=linescore&gameType=R';
-  try {
-    var data = await fetchJSON(url);
-    var games=[];
-    (data.dates||[]).forEach(function(d){(d.games||[]).forEach(function(g){games.push(g);});});
-    if (!games.length) return {runDiff:0,last7W:0,last7L:0,bullpenIPLast3:0};
-    var runDiff=0,wins=0,losses=0;
-    games.forEach(function(g){
-      var ls=g.linescore||{}, t=g.teams||{};
-      var isHome=(t.home||{}).team&&(t.home.team.id===teamId);
-      var my=isHome?(ls.teams||{}).home&&ls.teams.home.runs:(ls.teams||{}).away&&ls.teams.away.runs;
-      var op=isHome?(ls.teams||{}).away&&ls.teams.away.runs:(ls.teams||{}).home&&ls.teams.home.runs;
-      if(my!=null&&op!=null){runDiff+=(my-op);if(my>op)wins++;else if(my<op)losses++;}
-    });
-    var last3=games.slice(-3);
-    var bpLast3=last3.reduce(function(a,g){return a+Math.max(0,parseInt(((g.linescore||{}).currentInning||9))-5.5);},0);
-    return {runDiff:runDiff,last7W:wins,last7L:losses,bullpenIPLast3:bpLast3};
-  } catch(e){return {runDiff:0,last7W:0,last7L:0,bullpenIPLast3:0};}
-}
+// [duplicate fetchRecentGameLog removed — see scoring engine section]
 
 function loadWeather(venue) {
   var coords = STADIUM_COORDS[venue];
@@ -898,61 +847,81 @@ async function fetchPitcherFirstInnStats(personId) {
 async function fetchTeamStats(teamId) {
   if (!teamId) return null;
   var year = new Date().getFullYear();
-  var url = CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + year;
-  try {
-    var data = await fetchJSON(url);
-    var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
-    var s = st.stat || {};
-    var pa = parseFloat(s.plateAppearances||1) || 1;
-    return {
-      avg:    parseFloat(s.avg||'.250'),
-      obp:    parseFloat(s.obp||'.320'),
-      slg:    parseFloat(s.slg||'.400'),
-      ops:    parseFloat(s.ops||'.720'),
-      woba:   parseFloat(s.obp||'.320') * 0.9 + parseFloat(s.slg||'.400') * 0.3,
-      kpct:   parseFloat(s.strikeOuts||0) / pa,
-      bbpct:  parseFloat(s.baseOnBalls||0) / pa,
-      iso:    Math.max(0, parseFloat(s.slg||'.400') - parseFloat(s.avg||'.250')),
-      runsPerGame: parseFloat(s.runs||0) / Math.max(1, parseFloat(s.gamesPlayed||1))
-    };
-  } catch(e) { return null; }
+  // Try regular season first, fall back to spring training if 404
+  var gameTypes = ['R', 'S'];
+  for (var gi = 0; gi < gameTypes.length; gi++) {
+    var url = CFG.MLB_BASE + '/teams/' + teamId +
+      '/stats?stats=season&group=hitting&season=' + year + '&gameType=' + gameTypes[gi];
+    try {
+      var data = await fetchJSON(url);
+      var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
+      var s = st.stat || {};
+      var pa = parseFloat(s.plateAppearances||1) || 1;
+      if (pa < 5) continue; // not enough data, try next game type
+      return {
+        avg:    parseFloat(s.avg||'.250'),
+        obp:    parseFloat(s.obp||'.320'),
+        slg:    parseFloat(s.slg||'.400'),
+        ops:    parseFloat(s.ops||'.720'),
+        woba:   parseFloat(s.obp||'.320') * 0.9 + parseFloat(s.slg||'.400') * 0.3,
+        kpct:   parseFloat(s.strikeOuts||0) / pa,
+        bbpct:  parseFloat(s.baseOnBalls||0) / pa,
+        iso:    Math.max(0, parseFloat(s.slg||'.400') - parseFloat(s.avg||'.250')),
+        runsPerGame: parseFloat(s.runs||0) / Math.max(1, parseFloat(s.gamesPlayed||1))
+      };
+    } catch(e) { continue; }
+  }
+  return null;
 }
 
 async function fetchTeamPlatoonStats(teamId, vsHand) {
-  // vsHand: 'R' or 'L'
   if (!teamId) return null;
   var sitCode = vsHand === 'R' ? 'vr' : 'vl';
-  var url = CFG.MLB_BASE + '/teams/' + teamId +
-    '/stats?stats=statSplits&group=hitting&season=' + new Date().getFullYear() + '&sitCodes=' + sitCode;
-  try {
-    var data = await fetchJSON(url);
-    var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
-    var s = st.stat || {};
-    var pa = parseFloat(s.plateAppearances||1)||1;
-    return {
-      ops:  parseFloat(s.ops||'.720'),
-      obp:  parseFloat(s.obp||'.320'),
-      slg:  parseFloat(s.slg||'.400'),
-      kpct: parseFloat(s.strikeOuts||0)/pa,
-      iso:  Math.max(0,parseFloat(s.slg||'.400')-parseFloat(s.avg||'.250'))
-    };
-  } catch(e) { return null; }
+  var year = new Date().getFullYear();
+  var gameTypes = ['R', 'S'];
+  for (var gi = 0; gi < gameTypes.length; gi++) {
+    var url = CFG.MLB_BASE + '/teams/' + teamId +
+      '/stats?stats=statSplits&group=hitting&season=' + year +
+      '&sitCodes=' + sitCode + '&gameType=' + gameTypes[gi];
+    try {
+      var data = await fetchJSON(url);
+      var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
+      var s = st.stat || {};
+      var pa = parseFloat(s.plateAppearances||1)||1;
+      if (pa < 5) continue;
+      return {
+        ops:  parseFloat(s.ops||'.720'),
+        obp:  parseFloat(s.obp||'.320'),
+        slg:  parseFloat(s.slg||'.400'),
+        kpct: parseFloat(s.strikeOuts||0)/pa,
+        iso:  Math.max(0,parseFloat(s.slg||'.400')-parseFloat(s.avg||'.250'))
+      };
+    } catch(e) { continue; }
+  }
+  return null;
 }
 
 async function fetchBullpenStats(teamId) {
   if (!teamId) return null;
-  var url = CFG.MLB_BASE + '/teams/' + teamId +
-    '/stats?stats=season&group=pitching&season=' + new Date().getFullYear();
-  try {
-    var data = await fetchJSON(url);
-    var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
-    var s = st.stat || {};
-    // Estimate bullpen by taking team totals minus typical SP contribution
-    var era  = parseFloat(s.era||'4.00');
-    var whip = parseFloat(s.whip||'1.25');
-    var ip   = parseFloat(s.inningsPitched||1)||1;
-    return { era: era, whip: whip, ip: ip };
-  } catch(e) { return null; }
+  var year = new Date().getFullYear();
+  var gameTypes = ['R', 'S'];
+  for (var gi = 0; gi < gameTypes.length; gi++) {
+    var url = CFG.MLB_BASE + '/teams/' + teamId +
+      '/stats?stats=season&group=pitching&season=' + year + '&gameType=' + gameTypes[gi];
+    try {
+      var data = await fetchJSON(url);
+      var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
+      var s = st.stat || {};
+      var ip = parseFloat(s.inningsPitched||0)||0;
+      if (ip < 5) continue;
+      return {
+        era:  parseFloat(s.era||'4.00'),
+        whip: parseFloat(s.whip||'1.25'),
+        ip:   ip
+      };
+    } catch(e) { continue; }
+  }
+  return null;
 }
 
 async function fetchRecentGameLog(teamId) {
@@ -1602,13 +1571,11 @@ async function loadAll() {
     document.getElementById('liveBadge').classList.remove('show');
 
     var isNoGames = err.message === 'No games today';
-    document.getElementById('sampleBadge').style.display = 'inline-block';
     if (!isNoGames) {
-      // Only show error badge for actual API failures, not "no games scheduled"
-      document.getElementById('errBadge').textContent = 'API offline';
+      document.getElementById('errBadge').textContent = 'API offline — sample data';
       document.getElementById('errBadge').classList.add('show');
     }
-    document.getElementById('s-refresh').textContent = isNoGames ? 'No games today' : 'Sample data';
+    document.getElementById('s-refresh').textContent = isNoGames ? 'No games' : 'Sample data';
     document.getElementById('s-games').textContent = isNoGames ? '0' : SAMPLE_GAMES.length;
     renderAll();
   }
@@ -2583,6 +2550,31 @@ function tick() {
 // ═══════════════════════════════════════════════
 // RENDER ALL
 // ═══════════════════════════════════════════════
+async function runDiagnostic() {
+  var nl = String.fromCharCode(10);
+  var msg = 'Diamond Edge Diagnostic' + nl;
+  msg += 'Date: ' + todayStr() + nl;
+  try {
+    var r1 = await fetch(CFG.MLB_BASE + '/schedule?sportId=1&date=' + todayStr() + '&hydrate=team');
+    var d1 = await r1.json();
+    var g1 = ((d1.dates||[])[0]||{}).games||[];
+    msg += 'Regular season (sportId=1): ' + g1.length + ' games' + nl;
+  } catch(e) { msg += 'Regular season ERROR: ' + e.message + nl; }
+  try {
+    var r2 = await fetch(CFG.MLB_BASE + '/schedule?sportId=17&date=' + todayStr() + '&hydrate=team');
+    var d2 = await r2.json();
+    var g2 = ((d2.dates||[])[0]||{}).games||[];
+    msg += 'Spring training (sportId=17): ' + g2.length + ' games' + nl;
+  } catch(e) { msg += 'Spring training ERROR: ' + e.message + nl; }
+  try {
+    var r3 = await fetch('https://api.open-meteo.com/v1/forecast?latitude=40.83&longitude=-73.93&current=temperature_2m');
+    var d3 = await r3.json();
+    msg += 'Weather API: OK' + nl;
+  } catch(e) { msg += 'Weather ERROR: ' + e.message + nl; }
+  alert(msg);
+}
+
+
 function renderAll() {
   renderPlays();
   renderCards();
