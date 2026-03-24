@@ -241,8 +241,8 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
   <div class="hdr-r">
     <div class="bdg" id="dateBadge"></div>
     <div class="bdg" id="bvp-status" style="display:none">BvP loading...</div>
-    <div class="bdg bdg-sample" id="sampleBadge">Sample Data</div>
-    <div class="bdg bdg-live" id="liveBadge">&#9679; Live</div>
+    <div class="bdg bdg-sample" id="sampleBadge" style="display:none">Sample Data</div>
+    <div class="bdg bdg-live" id="liveBadge">&#9679; Live Data</div>
     <div class="bdg bdg-err" id="errBadge">API Error</div>
   </div>
 </header>
@@ -293,25 +293,59 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
 
 <!-- LINEUPS -->
 <div class="view" id="view-lineups">
-  <div class="sec"><div class="st">Daily Lineups <span class="ss">Confirmed lineups update model scores automatically</span></div></div>
+  <div class="sec"><div class="st">Daily Lineups <span class="ss">Auto-confirmed from MLB Stats API — paste backup available if API is delayed</span></div></div>
   <div class="sgrid">
-    <div class="sc"><div class="lb">Lineups confirmed</div><div class="vl" id="lu-confirmed" style="color:var(--gn)">0</div><div class="sb">of <span id="lu-total">0</span> games today</div></div>
-    <div class="sc"><div class="lb">Auto-fetch status</div><div class="vl" style="font-size:13px;margin-top:4px;font-family:var(--fm);color:var(--am)" id="lu-status">Pending</div><div class="sb">MLB Stats API</div></div>
-    <div class="sc"><div class="lb">Last lineup check</div><div class="vl" style="font-size:13px;margin-top:4px;font-family:var(--fm)" id="lu-time">--</div><div class="sb">Lineups lock ~1hr before game</div></div>
-    <div class="sc"><div class="lb">Manual paste</div><div class="vl" style="font-size:13px;margin-top:4px;color:var(--am)">Backup</div><div class="sb">Use if auto-fetch misses</div></div>
+    <div class="sc"><div class="lb">Pitchers confirmed</div><div class="vl" id="lu-confirmed" style="color:var(--gn)">0</div><div class="sb">of <span id="lu-total">0</span> games today</div></div>
+    <div class="sc"><div class="lb">Data status</div><div class="vl" style="font-size:13px;margin-top:4px;font-family:var(--fm);color:var(--am)" id="lu-status">Pending</div><div class="sb">MLB Stats API</div></div>
+    <div class="sc"><div class="lb">Last checked</div><div class="vl" style="font-size:13px;margin-top:4px;font-family:var(--fm)" id="lu-time">--</div><div class="sb">Auto-refreshes every 30 min</div></div>
+    <div class="sc"><div class="lb">Lineup lock time</div><div class="vl" style="font-size:13px;margin-top:4px;color:var(--bl)">~60-90 min</div><div class="sb">Before each game's first pitch</div></div>
   </div>
-  <div class="setup-banner show" style="margin-bottom:16px">
-    <div class="setup-title">Manual Lineup Paste (Backup)</div>
-    <div class="setup-step"><span class="setup-step-num">1</span>Go to rotowire.com/baseball/daily-lineups.php about 1-2 hours before first pitch</div>
-    <div class="setup-step"><span class="setup-step-num">2</span>Select all text on the page (Ctrl+A), copy it (Ctrl+C)</div>
-    <div class="setup-step"><span class="setup-step-num">3</span>Paste below — the parser will extract batting orders automatically</div>
+
+  <!-- Auto lineup status board -->
+  <div class="sec"><div class="st">Today's confirmed starters <span class="ss">Pulls automatically — no action needed</span></div></div>
+  <div id="lineupStatusBoard" class="tw">
+    <table><thead><tr>
+      <th>Game</th><th>Time</th><th>Away starter</th><th>Home starter</th><th>Status</th>
+    </tr></thead><tbody id="lineupStatusBody"></tbody></table>
   </div>
-  <div class="paste-area">
-    <textarea id="lineupPaste" placeholder="Paste Rotowire lineup page text here...&#10;&#10;The parser will automatically extract batting orders, pitcher confirmations, and lineup changes."></textarea>
-    <br><button class="paste-btn" onclick="parseLineups()">Parse Lineups</button>
-    <div class="parsed-lineup" id="parsedOut"></div>
+
+  <!-- Rotowire paste backup -->
+  <div class="sec" style="margin-top:20px">
+    <div class="st">Rotowire paste backup <span class="ss">Optional — use if lineups aren't confirmed by API 90 min before first pitch</span></div>
   </div>
-  <div id="lineupCards" style="margin-top:16px"></div>
+  <div style="background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:14px 16px;margin-bottom:14px">
+    <div style="font-size:11px;color:var(--mu);margin-bottom:10px;line-height:1.6">
+      Go to <span style="color:var(--bl);font-family:var(--fm)">rotowire.com/baseball/daily-lineups.php</span> — select all (Ctrl+A), copy (Ctrl+C), paste below. The parser will extract batting orders for all games automatically.
+    </div>
+    <textarea id="lineupPasteBox" placeholder="Paste full Rotowire lineups page here..." style="width:100%;min-height:100px;background:var(--sf2);border:1px solid var(--bd2);border-radius:var(--r);padding:10px 12px;color:var(--tx);font-family:var(--fm);font-size:11px;resize:vertical;outline:none;line-height:1.6;box-sizing:border-box"></textarea>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+      <button class="paste-btn" onclick="parseLineupPaste()">Parse Lineups</button>
+      <button onclick="clearLineupPaste()" style="background:none;border:none;color:var(--mu);font-family:var(--fm);font-size:11px;cursor:pointer;padding:0">Clear</button>
+      <span id="parseStatus" style="font-family:var(--fm);font-size:10px;color:var(--mu)"></span>
+    </div>
+    <div id="parsedLineupResults" style="margin-top:12px;display:none"></div>
+  </div>
+
+  <!-- Late scratch / injury override -->
+  <div class="sec">
+    <div class="st">Late scratch override <span class="ss">Flag if a starter gets scratched close to game time</span></div>
+  </div>
+  <div style="background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:14px 16px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
+      <div>
+        <div style="font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--mu);margin-bottom:5px">Game</div>
+        <select id="scratchGame" style="width:100%;background:var(--sf2);border:1px solid var(--bd2);border-radius:var(--r);padding:6px 10px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none">
+          <option value="">Select game...</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-family:var(--fm);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--mu);margin-bottom:5px">Note</div>
+        <input id="scratchNote" type="text" placeholder="e.g. Cole scratched — TBD" style="width:100%;background:var(--sf2);border:1px solid var(--bd2);border-radius:var(--r);padding:6px 10px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none" />
+      </div>
+      <button onclick="addScratch()" style="padding:7px 14px;border-radius:var(--r);border:1px solid var(--bd2);background:var(--rdd);color:var(--rd);font-family:var(--fh);font-size:12px;font-weight:700;letter-spacing:.06em;cursor:pointer;text-transform:uppercase;white-space:nowrap">Flag Scratch</button>
+    </div>
+    <div id="scratchList" style="margin-top:10px"></div>
+  </div>
 </div>
 
 <!-- PARK FACTORS -->
@@ -657,9 +691,23 @@ function fetchJSON(url) {
   });
 }
 
-function loadSchedule() {
-  var url = CFG.MLB_BASE + '/schedule?sportId=1&date=' + todayStr() + '&hydrate=team,venue,probablePitcher,linescore,game(content(summary))&language=en';
-  return fetchJSON(url);
+async function loadSchedule() {
+  var hydrate = 'team,venue,probablePitcher,linescore,game(content(summary))';
+  // Try regular season first, fall back to spring training if no games
+  var regUrl = CFG.MLB_BASE + '/schedule?sportId=1&date=' + todayStr() + '&hydrate=' + hydrate + '&language=en';
+  try {
+    var data = await fetchJSON(regUrl);
+    var games = ((data.dates || [])[0] || {}).games || [];
+    if (games.length > 0) {
+      data._sportType = 'Regular Season';
+      return data;
+    }
+  } catch(e) {}
+  // No regular season games — try spring training (sportId=17)
+  var stUrl = CFG.MLB_BASE + '/schedule?sportId=17&date=' + todayStr() + '&hydrate=' + hydrate + '&language=en';
+  var stData = await fetchJSON(stUrl);
+  stData._sportType = 'Spring Training';
+  return stData;
 }
 
 // ── LIVE DATA FETCH FUNCTIONS ────────────────────────────────────
@@ -1293,7 +1341,15 @@ async function scoreAndAttach(game, umpMap) {
   game.awayH = awaySP ? 'RHP' : 'RHP'; // placeholder until roster hydration
   game.homeH = homeSP ? 'RHP' : 'RHP';
 
-  var ump = (umpMap && umpMap[game.venue]) || UMPS.find(function(u){return u.name==='Jeff Nelson';}) || {kAdj:0,runAdj:0};
+  var ump = (umpMap && umpMap[game.venue]) ||
+    UMPS.find(function(u){ return u.name === 'Jeff Nelson'; }) ||
+    {name:'Unknown',kAdj:0,runAdj:0,zone:'Average',csw:0.285};
+
+  // Apply sample size confidence blending (< 8 starts → blend toward league avg)
+  var awayStarts = awaySP ? Math.round((awaySP.inningsPitched||0) / 5.5) : 0;
+  var homeStarts = homeSP ? Math.round((homeSP.inningsPitched||0) / 5.5) : 0;
+  awaySP = applyConfidenceAdjustment(awaySP, awayStarts);
+  homeSP = applyConfidenceAdjustment(homeSP, homeStarts);
 
   var awayData = {
     abbr: game.away, pitcher: game.awayP,
@@ -1479,13 +1535,16 @@ async function loadAll() {
       throw new Error('No games today');
     }
 
-    // Load weather for each game in parallel
+    // Load weather and umpire assignments in parallel
     var wxPromises = games.map(function(g) {
       var venue = (g.venue || {}).name || '';
       return loadWeather(venue).catch(function() { return null; });
     });
 
+    var umpPromise = fetchUmpireAssignments().catch(function() { return {}; });
+
     var wxResults = await Promise.all(wxPromises);
+    var UMP_MAP = await umpPromise;
 
     // Build skeleton game objects immediately so UI can show something
     LIVE_GAMES = games.map(function(g, i) {
@@ -1493,12 +1552,17 @@ async function loadAll() {
     });
 
     USING_SAMPLE = false;
+    var isSpringTraining = schedData._sportType === 'Spring Training';
     document.getElementById('sampleBadge').style.display = 'none';
     document.getElementById('liveBadge').classList.add('show');
+    document.getElementById('liveBadge').textContent = isSpringTraining ? 'Spring Training' : '● Live';
+    document.getElementById('liveBadge').style.background = isSpringTraining ? 'var(--acd)' : '';
+    document.getElementById('liveBadge').style.color = isSpringTraining ? 'var(--am)' : '';
+    document.getElementById('liveBadge').style.borderColor = isSpringTraining ? 'rgba(245,166,35,.35)' : '';
     document.getElementById('lu-confirmed').textContent = games.length;
     document.getElementById('lu-total').textContent = games.length;
-    document.getElementById('lu-status').textContent = 'Live';
-    document.getElementById('lu-status').style.color = 'var(--gn)';
+    document.getElementById('lu-status').textContent = isSpringTraining ? 'Spring Training' : 'Live';
+    document.getElementById('lu-status').style.color = isSpringTraining ? 'var(--am)' : 'var(--gn)';
     document.getElementById('lu-time').textContent = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
 
     var now = new Date();
@@ -1513,7 +1577,7 @@ async function loadAll() {
     if (scoreBadge) { scoreBadge.style.display = 'inline-block'; scoreBadge.textContent = 'Scoring games...'; }
 
     var scorePromises = LIVE_GAMES.map(function(game) {
-      return scoreAndAttach(game, null).catch(function(e) {
+      return scoreAndAttach(game, UMP_MAP).catch(function(e) {
         console.warn('Score failed for', game.away, '@', game.home, e.message);
         return game;
       });
@@ -1538,13 +1602,14 @@ async function loadAll() {
     document.getElementById('liveBadge').classList.remove('show');
 
     var isNoGames = err.message === 'No games today';
+    document.getElementById('sampleBadge').style.display = 'inline-block';
     if (!isNoGames) {
-      document.getElementById('errBadge').textContent = isNoGames ? 'No games' : 'API offline — sample data';
+      // Only show error badge for actual API failures, not "no games scheduled"
+      document.getElementById('errBadge').textContent = 'API offline';
       document.getElementById('errBadge').classList.add('show');
     }
-
-    document.getElementById('s-refresh').textContent = 'Sample';
-    document.getElementById('s-games').textContent = SAMPLE_GAMES.length;
+    document.getElementById('s-refresh').textContent = isNoGames ? 'No games today' : 'Sample data';
+    document.getElementById('s-games').textContent = isNoGames ? '0' : SAMPLE_GAMES.length;
     renderAll();
   }
 }
@@ -1554,56 +1619,288 @@ async function loadAll() {
 // ═══════════════════════════════════════════════
 // LINEUP PASTE PARSER
 // ═══════════════════════════════════════════════
-function parseLineups() {
-  var raw = document.getElementById('lineupPaste').value;
-  if (!raw.trim()) return;
-  var lines = raw.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
-  var results = [];
-  var teamPattern = /^([A-Z][a-z]+ ?[A-Za-z]*)\s+(\d{1,2})\.\s+(.+)$/;
+// ── LINEUP STATUS BOARD ──────────────────────────────────────────
+var SCRATCHES = [];
+
+// ═══════════════════════════════════════════════
+// LINEUP PASTE PARSER
+// Handles Rotowire copy-paste with multiple format fallbacks
+// ═══════════════════════════════════════════════
+
+// Position abbreviations used by Rotowire
+var POS_LIST = ['CF','LF','RF','SS','2B','3B','1B','C','DH','P','SP','RP'];
+
+function parseLineupPaste() {
+  var box = document.getElementById('lineupPasteBox');
+  var status = document.getElementById('parseStatus');
+  var results = document.getElementById('parsedLineupResults');
+  if (!box || !status) return;
+  var raw = box.value.trim();
+  if (!raw) { status.textContent = 'Nothing pasted yet.'; return; }
+
+  var lineups = {};
+  var found = 0;
+
+  // ── Strategy 1: Rotowire format "POS FirstInitial. LastName Hand"
+  // e.g. "CF C. Mullins L" or "1B P. Goldschmidt R"
+  // Also handles bullet separators: "CF C. Mullins L · SS ..."
+  var lines = raw.split(/[\n\u00B7\u2022|]+/).map(function(l){ return l.trim(); }).filter(Boolean);
   var currentTeam = null;
-  var order = [];
+  var currentOrder = [];
 
   lines.forEach(function(line) {
-    // Detect team headers (ALL CAPS words)
-    if (/^[A-Z\s]{4,}$/.test(line) && line.length < 40) {
-      if (currentTeam && order.length) {
-        results.push({team: currentTeam, order: order.slice()});
-      }
-      currentTeam = line;
-      order = [];
-    }
-    // Detect batting order entries (number. Name Position)
-    var m = line.match(/^(\d+)\.\s+(.+)/);
-    if (m && parseInt(m[1]) <= 9) {
-      order.push(m[1] + '. ' + m[2]);
-    }
-    // Detect SP: entries
-    if (/^SP:\s+/.test(line) || /^P:\s+/.test(line)) {
+    // Detect team name lines — Rotowire uses team name as section header
+    // Match lines that are just a team name (short, no position prefix)
+    var teamMatch = line.match(/^([A-Z][a-z]+ ?[A-Z]?[a-z]*(?:\s[A-Z][a-z]+)?)$/);
+    // Check if line starts with a position
+    var posMatch = line.match(/^(CF|LF|RF|SS|2B|3B|1B|DH|C|SP|RP|P)\s+([A-Z]\.\s*[A-Z][a-z']+(?:\s[A-Z][a-z']+)?)\s+([LRS])/);
+
+    if (posMatch) {
+      var pos  = posMatch[1];
+      var name = posMatch[2].replace(/\s+/g,' ').trim();
+      var hand = posMatch[3];
       if (currentTeam) {
-        results.push({team: currentTeam, order: order.slice(), sp: line});
-        order = [];
-        currentTeam = null;
+        if (!lineups[currentTeam]) lineups[currentTeam] = [];
+        lineups[currentTeam].push({pos:pos, name:name, hand:hand});
+        found++;
+      }
+    } else {
+      // Try to detect a team name — look for known MLB team words
+      var teamWords = ['Yankees','Red Sox','Blue Jays','Rays','Orioles','White Sox','Guardians',
+        'Tigers','Royals','Twins','Astros','Angels','Athletics','Mariners','Rangers',
+        'Braves','Marlins','Mets','Phillies','Nationals','Cubs','Reds','Brewers',
+        'Pirates','Cardinals','Diamondbacks','Rockies','Dodgers','Padres','Giants',
+        'Brewers','Guardians'];
+      var isTeam = teamWords.some(function(t){ return line.indexOf(t) !== -1; });
+      if (isTeam && line.length < 40) {
+        if (currentTeam && currentOrder.length) lineups[currentTeam] = currentOrder;
+        currentTeam = line.replace(/[^a-zA-Z\s]/g,'').trim();
+        currentOrder = [];
       }
     }
   });
-  if (currentTeam && order.length) {
-    results.push({team: currentTeam, order: order});
+
+  // ── Strategy 2: If strategy 1 found nothing, try looser number-prefixed format
+  // e.g. "1. Freddie Freeman 1B L" or "1) Freddie Freeman (1B)"
+  if (found === 0) {
+    var numLines = raw.split('\n');
+
+    numLines.forEach(function(line) {
+      var m = line.match(/^\s*(\d+)[.)]\s+([A-Z][a-z]+(?:\s[A-Z][a-z']+)+)\s+([A-Z]{1,2})\s*([LRS]?)/);
+      if (m) {
+        var num  = parseInt(m[1]);
+        var name = m[2].trim();
+        var pos  = m[3];
+        var hand = m[4] || '?';
+        if (num >= 1 && num <= 9 && POS_LIST.indexOf(pos) !== -1) {
+          if (!lineups['Parsed']) lineups['Parsed'] = [];
+          lineups['Parsed'].push({order:num, pos:pos, name:name, hand:hand});
+          found++;
+        }
+      }
+    });
   }
 
-  var out = document.getElementById('parsedOut');
-  if (!results.length) {
-    out.textContent = 'No structured lineup data detected. Make sure you copied the full Rotowire page. Try Ctrl+A then Ctrl+C on the Rotowire lineup page.';
-    out.classList.add('show');
+  // ── Strategy 3: Last resort — extract any name+position pairs
+  if (found === 0) {
+    var tokens = raw.match(/([A-Z][a-z]+(?:\s[A-Z][a-z']+)+)\s+(CF|LF|RF|SS|2B|3B|1B|DH|C)/g);
+    if (tokens && tokens.length) {
+      lineups['Detected'] = tokens.map(function(t) {
+        var parts = t.trim().split(/\s+/);
+        var pos = parts.pop();
+        return {name: parts.join(' '), pos: pos, hand: '?'};
+      });
+      found = lineups['Detected'].length;
+    }
+  }
+
+  if (!found || !Object.keys(lineups).length) {
+    status.textContent = 'Could not parse — try copying just the lineups section, not the whole page.';
+    status.style.color = 'var(--rd)';
+    results.style.display = 'none';
     return;
   }
 
-  var html = results.map(function(r) {
-    return '<strong style="color:var(--ac)">' + r.team + '</strong>\n' +
-      r.order.join('\n') + (r.sp ? '\n' + r.sp : '');
-  }).join('\n\n');
+  // Render parsed lineups
+  status.textContent = found + ' players parsed across ' + Object.keys(lineups).length + ' team(s)';
+  status.style.color = 'var(--gn)';
+  results.style.display = 'block';
 
-  out.innerHTML = html.replace(/\n/g, '<br>');
-  out.classList.add('show');
+  var html = '';
+  Object.keys(lineups).forEach(function(team) {
+    var players = lineups[team];
+    html += '<div style="margin-bottom:12px;background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;">';
+    html += '<div style="font-family:var(--fh);font-size:12px;font-weight:800;margin-bottom:6px;color:var(--tx)">' + team + '</div>';
+    players.forEach(function(p, i) {
+      html += '<div style="display:flex;gap:8px;font-family:var(--fm);font-size:10px;padding:2px 0;border-bottom:0.5px solid var(--bd);color:var(--tx)">';
+      html += '<span style="color:var(--mu);min-width:16px">' + (i+1) + '</span>';
+      html += '<span style="min-width:32px;color:var(--bl)">' + (p.pos||'') + '</span>';
+      html += '<span style="flex:1">' + p.name + '</span>';
+      html += '<span style="color:var(--mu)">' + (p.hand||'') + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  results.innerHTML = html;
+
+  // Store parsed lineups globally for use in scoring
+  window.PARSED_LINEUPS = lineups;
+}
+
+function clearLineupPaste() {
+  var box = document.getElementById('lineupPasteBox');
+  var status = document.getElementById('parseStatus');
+  var results = document.getElementById('parsedLineupResults');
+  if (box) box.value = '';
+  if (status) { status.textContent = ''; }
+  if (results) { results.style.display = 'none'; results.innerHTML = ''; }
+  window.PARSED_LINEUPS = null;
+}
+
+// ═══════════════════════════════════════════════
+// UMPIRE ASSIGNMENT — from MLB Stats API schedule
+// ═══════════════════════════════════════════════
+// The schedule API returns umpires when hydrated with 'officials'
+// We fetch this separately so it doesn't slow down the main schedule call
+
+async function fetchUmpireAssignments() {
+  var url = CFG.MLB_BASE + '/schedule?sportId=1&date=' + todayStr() +
+    '&hydrate=officials&language=en';
+  try {
+    var data = await fetchJSON(url);
+    var umpMap = {};
+    var dates = data.dates || [];
+    (dates[0] ? dates[0].games : []).forEach(function(g) {
+      var officials = g.officials || [];
+      var hp = officials.filter(function(o) {
+        return (o.officialType||'').toLowerCase().indexOf('home plate') !== -1 ||
+               (o.officialType||'').toLowerCase().indexOf('hp') !== -1;
+      })[0];
+      if (hp && hp.official) {
+        var name = hp.official.fullName || '';
+        // Match name against our UMPS table
+        var umpRecord = UMPS.filter(function(u) {
+          // Try exact match first, then last name match
+          return u.name === name ||
+                 u.name.split(' ').pop() === name.split(' ').pop();
+        })[0];
+        var venue = (g.venue || {}).name || '';
+        if (venue) umpMap[venue] = umpRecord || {name: name, kAdj:0, runAdj:0, zone:'Average', csw:0.285};
+      }
+    });
+    return umpMap;
+  } catch(e) {
+    return {};
+  }
+}
+
+// ═══════════════════════════════════════════════
+// SAMPLE SIZE CONFIDENCE ADJUSTMENT
+// Blends small-sample stats toward league average
+// ═══════════════════════════════════════════════
+function blendToLeague(val, leagueAvg, starts, threshold) {
+  // Below threshold starts: weighted blend toward league average
+  // e.g. 3 starts out of 8 threshold = 37.5% real, 62.5% league avg
+  if (!starts || starts >= threshold) return val;
+  var weight = starts / threshold;
+  return val * weight + leagueAvg * (1 - weight);
+}
+
+function applyConfidenceAdjustment(pitcherStats, starts) {
+  if (!pitcherStats) return pitcherStats;
+  var threshold = 8; // starts needed for full confidence
+  if (!starts || starts >= threshold) return pitcherStats;
+  // Blend key stats toward league average
+  return Object.assign({}, pitcherStats, {
+    era:   blendToLeague(pitcherStats.era,   LEAGUE.spEra,   starts, threshold),
+    xfip:  blendToLeague(pitcherStats.xfip,  LEAGUE.spXfip,  starts, threshold),
+    kPer9: blendToLeague(pitcherStats.kPer9, LEAGUE.spK9,    starts, threshold),
+    bbPer9:blendToLeague(pitcherStats.bbPer9,LEAGUE.spBb9,   starts, threshold),
+    whip:  blendToLeague(pitcherStats.whip,  LEAGUE.spWhip,  starts, threshold),
+    kpct:  blendToLeague(pitcherStats.kpct,  LEAGUE.spKpct,  starts, threshold),
+    bbpct: blendToLeague(pitcherStats.bbpct, LEAGUE.spBbpct, starts, threshold),
+    kbb:   blendToLeague(pitcherStats.kbb,   LEAGUE.spKbb,   starts, threshold),
+    _blended: true,
+    _starts: starts,
+    _confidence: Math.round(starts / threshold * 100)
+  });
+}
+
+function renderLineupStatusBoard() {
+  var tbody = document.getElementById('lineupStatusBody');
+  var sel   = document.getElementById('scratchGame');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (sel) sel.innerHTML = '<option value="">Select game...</option>';
+
+  var games = USING_SAMPLE ? SAMPLE_GAMES : LIVE_GAMES;
+  if (!games.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--mu);padding:20px;font-size:11px">No games loaded yet — data will appear after first load</td></tr>';
+    return;
+  }
+
+  games.forEach(function(g) {
+    var scratch = SCRATCHES.filter(function(s){ return s.gameId === g.id; })[0];
+    var awayP   = scratch && scratch.side === 'away' ? scratch.note : g.awayP;
+    var homeP   = scratch && scratch.side === 'home' ? scratch.note : g.homeP;
+    var awayConf= g.awayP && g.awayP !== 'TBD';
+    var homeConf= g.homeP && g.homeP !== 'TBD';
+    var bothConf= awayConf && homeConf;
+    var statusColor = bothConf ? 'var(--gn)' : 'var(--am)';
+    var statusText  = bothConf ? 'Confirmed' : awayConf || homeConf ? 'Partial' : 'Pending';
+    if (scratch) { statusColor = 'var(--rd)'; statusText = 'Scratch flagged'; }
+
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="font-family:var(--fh);font-size:14px;font-weight:800">'+g.away+' @ '+g.home+'</td>'+
+      '<td style="font-family:var(--fm);font-size:10px;color:var(--mu)">'+g.time+'</td>'+
+      '<td style="font-size:11px'+(scratch&&scratch.side==='away'?';color:var(--rd)':'')+'">'+awayP+'<span style="font-family:var(--fm);font-size:9px;color:var(--mu);margin-left:5px">'+g.awayH+'</span></td>'+
+      '<td style="font-size:11px'+(scratch&&scratch.side==='home'?';color:var(--rd)':'')+'">'+homeP+'<span style="font-family:var(--fm);font-size:9px;color:var(--mu);margin-left:5px">'+g.homeH+'</span></td>'+
+      '<td><span style="font-family:var(--fh);font-size:11px;font-weight:700;color:'+statusColor+'">'+statusText+'</span></td>';
+    tbody.appendChild(tr);
+
+    // Populate scratch dropdown
+    if (sel) {
+      var opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.away + ' @ ' + g.home + ' (' + g.time + ')';
+      sel.appendChild(opt);
+    }
+  });
+
+  renderScratchList();
+}
+
+function addScratch() {
+  var gameId = parseInt(document.getElementById('scratchGame').value);
+  var note   = (document.getElementById('scratchNote').value||'').trim();
+  if (!gameId || !note) {
+    alert('Select a game and enter a note about the scratch.');
+    return;
+  }
+  SCRATCHES = SCRATCHES.filter(function(s){ return s.gameId !== gameId; });
+  SCRATCHES.push({gameId: gameId, note: note, side: 'away', time: new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})});
+  document.getElementById('scratchNote').value = '';
+  document.getElementById('scratchGame').value = '';
+  renderLineupStatusBoard();
+}
+
+function removeScratch(gameId) {
+  SCRATCHES = SCRATCHES.filter(function(s){ return s.gameId !== gameId; });
+  renderLineupStatusBoard();
+}
+
+function renderScratchList() {
+  var el = document.getElementById('scratchList');
+  if (!el) return;
+  if (!SCRATCHES.length) { el.innerHTML = ''; return; }
+  el.innerHTML = SCRATCHES.map(function(s) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--bd);font-size:11px">'+
+      '<span style="color:var(--rd);font-family:var(--fm)">'+s.time+'</span>'+
+      '<span>'+s.note+'</span>'+
+      '<button onclick="removeScratch('+s.gameId+')" style="margin-left:auto;background:none;border:none;color:var(--mu);cursor:pointer;font-size:12px">x</button>'+
+      '</div>';
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════
@@ -2259,16 +2556,28 @@ function sw(name, el) {
 // COUNTDOWN
 // ═══════════════════════════════════════════════
 function tick() {
-  var od = new Date('2026-03-26T13:00:00');
+  var on  = new Date('2026-03-25T20:05:00'); // Opening Night NYY@SF
+  var od  = new Date('2026-03-26T13:00:00'); // Opening Day
   var now = new Date();
-  var diff = od - now;
-  var el = document.getElementById('countdown');
+  var el  = document.getElementById('countdown');
   if (!el) return;
-  if (diff <= 0) { el.textContent = 'Season is LIVE'; return; }
+  if (now >= od) {
+    el.textContent = 'Season is LIVE';
+    var ob = document.getElementById('odBadge');
+    if (ob) { ob.textContent = 'Season Live'; ob.style.background = 'var(--gnd)'; ob.style.color = 'var(--gn)'; }
+    return;
+  }
+  var target = now < on ? on : od;
+  var label  = now < on ? 'Opening Night NYY @ SF' : 'Opening Day';
+  var diff = target - now;
   var d = Math.floor(diff/86400000);
   var h = Math.floor((diff%86400000)/3600000);
   var m = Math.floor((diff%3600000)/60000);
-  el.textContent = d+'d '+h+'h '+m+'m until first pitch';
+  var parts = [];
+  if (d > 0) parts.push(d+'d');
+  parts.push(h+'h');
+  parts.push(m+'m');
+  el.textContent = parts.join(' ') + ' until ' + label;
 }
 
 // ═══════════════════════════════════════════════
@@ -2279,6 +2588,7 @@ function renderAll() {
   renderCards();
   renderBvP();
   renderTodayPicker();
+  renderLineupStatusBoard();
 }
 
 // ═══════════════════════════════════════════════
@@ -2294,9 +2604,12 @@ document.addEventListener('DOMContentLoaded', function() {
   tick();
   setInterval(tick, 60000);
   // Load live data — falls back to sample automatically on error
+  // Show sample data immediately so dashboard never looks empty
   LIVE_GAMES = SAMPLE_GAMES;
   USING_SAMPLE = true;
+  document.getElementById('sampleBadge').style.display = 'inline-block';
   renderAll();
+  // Then try to fetch live data (will update if regular season games exist)
   loadAll();
   // Auto-refresh every 30 minutes
   setInterval(loadAll, 30*60*1000);
