@@ -1510,16 +1510,9 @@ async function fetchRoster(teamId) {
         var isP = p.pos === 'P' || p.pos === 'SP' || p.pos === 'RP' || p.pos === 'TWP';
         return p.id && !isP;
       });
-      if (batters.length >= 3) {
-        console.log('Roster loaded for team', teamId, ':', batters.length, 'batters via', attempts[ri].split('?')[1]);
-        return batters;
-      }
-    } catch(e) {
-      console.warn('Roster attempt', ri, 'failed for team', teamId, ':', e.message);
-      continue;
-    }
+      if (batters.length >= 3) return batters;
+    } catch(e) { continue; }
   }
-  console.warn('All roster attempts failed for team', teamId);
   return [];
 }
 
@@ -1539,7 +1532,7 @@ async function fetchBvPSplit(pitcherId, batterId) {
     var st = splits[0].stat || {};
     var batter = splits[0].batter || {};
     var pa = parseInt(st.plateAppearances) || 0;
-    if (pa < 8) return null;
+    if (pa < 5) return null;
     var avg = parseFloat(st.avg) || 0;
     var obp = parseFloat(st.obp) || 0;
     var slg = parseFloat(st.slg) || 0;
@@ -1581,20 +1574,10 @@ async function loadBvPForGames(games) {
     var awayPitcherId = game.awayPitcherId;
     var homePitcherId = game.homePitcherId;
 
-    console.log('BvP game:', game.away, '@', game.home,
-      '| Away pitcher ID:', awayPitcherId,
-      '| Home pitcher ID:', homePitcherId,
-      '| Away team ID:', awayTeamId,
-      '| Home team ID:', homeTeamId);
-
-    if (!awayPitcherId && !homePitcherId) {
-      console.warn('No pitcher IDs found for', game.away, '@', game.home, '- skipping BvP');
-      continue;
-    }
+    if (!awayPitcherId && !homePitcherId) continue;
 
     var awayBatters = awayTeamId ? await fetchRoster(awayTeamId) : [];
     var homeBatters = homeTeamId ? await fetchRoster(homeTeamId) : [];
-    console.log('Batters fetched:', awayBatters.length, 'away,', homeBatters.length, 'home');
     await sleep(150);
 
     var bvpResults = [];
