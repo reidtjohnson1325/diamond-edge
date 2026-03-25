@@ -727,54 +727,79 @@ async function loadSchedule() {
 async function fetchPitcherStats(personId) {
   if (!personId) return null;
   var year = new Date().getFullYear();
-  var seasons = [year, year - 1];
-  for (var si = 0; si < seasons.length; si++) {
-    // Use stats=season only — seasonAdvanced causes errors on some endpoints
-    var url = CFG.MLB_BASE + '/people/' + personId +
-      '/stats?stats=season&group=pitching&season=' + seasons[si];
-    try {
-      var data = await fetchJSON(url);
-      var splits = [];
-      (data.stats||[]).forEach(function(s){
-        (s.splits||[]).forEach(function(sp){ splits.push(sp.stat||{}); });
-      });
-      if (!splits.length) continue;
-      // Check for real data — empty season returns splits with no innings
-      var testIp = parseFloat((splits[0]||{}).inningsPitched||0);
-      if (testIp < 1) continue;
-      var out = {};
-      splits.forEach(function(s){ Object.assign(out, s); });
-      var ip = parseFloat(out.inningsPitched)||0;
-      if (ip < 5) continue;
-      var era   = parseFloat(out.era)||4.50;
-      var whip  = parseFloat(out.whip)||1.30;
-      var so    = parseFloat(out.strikeOuts||0);
-      var bb    = parseFloat(out.baseOnBalls||0);
-      var hr    = parseFloat(out.homeRuns||0);
-      var hbp   = parseFloat(out.hitByPitch||0);
-      var kPer9 = ip > 0 ? so / ip * 9 : 0;
-      var bbPer9= ip > 0 ? bb / ip * 9 : 0;
-      var kpct  = kPer9 / (kPer9 + 27); // rough conversion
-      var bbpct = bbPer9 / (bbPer9 + 27);
-      var xfip  = Math.max(1.5, Math.min(7.5,
-        ((13 * hr + 3 * (bb + hbp) - 2 * so) / ip) + 3.10
-      ));
-      return {
-        era: era, whip: whip,
-        kPer9: parseFloat(kPer9.toFixed(2)),
-        bbPer9: parseFloat(bbPer9.toFixed(2)),
-        kpct: parseFloat((so / (ip * 3 + bb + so) || 0.22).toFixed(3)),
-        bbpct: parseFloat((bb / (ip * 3 + bb + so) || 0.08).toFixed(3)),
-        kbb: parseFloat(((so - bb) / (ip * 3 + bb + so) || 0.14).toFixed(3)),
-        xfip: parseFloat(xfip.toFixed(2)),
-        ip: ip,
-        strikeOuts: Math.round(so),
-        inningsPitched: ip,
-        veloTrend: 'stable'
-      };
-    } catch(e) { continue; }
-  }
-  return null;
+  var prevYear = year - 1;
+
+  var parsePitcher = function(data) {
+    var splits = [];
+    ((data||{}).stats||[]).forEach(function(s){
+      (s.splits||[]).forEach(function(sp){ splits.push(sp.stat||{}); });
+    });
+    if (!splits.length) return null;
+    var out = {};
+    splits.forEach(function(s){ Object.assign(out, s); });
+    var ip = parseFloat(out.inningsPitched||0);
+    if (ip < 1) return null;
+    var so = parseFloat(out.strikeOuts||0);
+    var bb = parseFloat(out.baseOnBalls||0);
+    var hr = parseFloat(out.homeRuns||0);
+    var hbp = parseFloat(out.hitByPitch||0);
+    var kPer9  = ip > 0 ? so/ip*9 : 0;
+    var bbPer9 = ip > 0 ? bb/ip*9 : 0;
+    var batsFaced = ip*3 + bb + so;
+    var xfip = Math.max(1.5, Math.min(7.5,
+      ((13*hr + 3*(bb+hbp) - 2*so) / ip) + 3.10
+    ));
+    return {
+      ip: ip,
+      era:   parseFloat(out.era)||4.50,
+      whip:  parseFloat(out.whip)||1.30,
+      kPer9: parseFloat(kPer9.toFixed(2)),
+      bbPer9:parseFloat(bbPer9.toFixed(2)),
+      kpct:  parseFloat((so/Math.max(1,batsFaced)).toFixed(3)),
+      bbpct: parseFloat((bb/Math.max(1,batsFaced)).toFixed(3)),
+      kbb:   parseFloat(((so-bb)/Math.max(1,batsFaced)).toFixed(3)),
+      xfip:  parseFloat(xfip.toFixed(2)),
+      strikeOuts: Math.round(so),
+      inningsPitched: ip,
+      veloTrend: 'stable'
+    };
+  };
+
+  // Fetch both years in parallel
+  var curData = null, prevData = null;
+  var results = await Promise.all([
+    fetchJSON(CFG.MLB_BASE+'/people/'+personId+'/stats?stats=season&group=pitching&season='+year).catch(function(){return null;}),
+    fetchJSON(CFG.MLB_BASE+'/people/'+personId+'/stats?stats=season&group=pitching&season='+prevYear).catch(function(){return null;})
+  ]);
+  curData  = parsePitcher(results[0]);
+  prevData = parsePitcher(results[1]);
+
+  if (!prevData && !curData) return null;
+  if (!curData || curData.ip < 1) return prevData;
+  if (!prevData) return curData;
+
+  // Marcel blend: ip / (ip + 20) for pitchers
+  // At 20 IP (3-4 starts) = 50/50, at 60 IP = 75% current, at 120 IP = 86% current
+  var REGRESS_IP = 20;
+  var curW  = curData.ip;
+  var prevW = REGRESS_IP;
+  var total = curW + prevW;
+  var blendVal = function(c, p) { return (c*curW + p*prevW) / total; };
+
+  return {
+    ip: curData.ip,
+    era:    parseFloat(blendVal(curData.era,    prevData.era).toFixed(2)),
+    whip:   parseFloat(blendVal(curData.whip,   prevData.whip).toFixed(2)),
+    kPer9:  parseFloat(blendVal(curData.kPer9,  prevData.kPer9).toFixed(2)),
+    bbPer9: parseFloat(blendVal(curData.bbPer9, prevData.bbPer9).toFixed(2)),
+    kpct:   parseFloat(blendVal(curData.kpct,   prevData.kpct).toFixed(3)),
+    bbpct:  parseFloat(blendVal(curData.bbpct,  prevData.bbpct).toFixed(3)),
+    kbb:    parseFloat(blendVal(curData.kbb,     prevData.kbb).toFixed(3)),
+    xfip:   parseFloat(blendVal(curData.xfip,   prevData.xfip).toFixed(2)),
+    strikeOuts: curData.strikeOuts,
+    inningsPitched: curData.ip,
+    veloTrend: 'stable'
+  };
 }
 
 async function fetchPitcherFirstInnStats(personId) {
@@ -841,40 +866,80 @@ async function fetchTeamStats(teamId) {
   if (!teamId) return null;
   var year = new Date().getFullYear();
   var prevYear = year - 1;
-  // Try current year first, then prior year as fallback
-  // MLB API returns 200 with empty data when season hasn't started
-  // so we check totalSize and gamesPlayed to detect real vs empty responses
-  var urlSets = [
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + year,
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + year + '&gameType=R',
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + year + '&gameType=S',
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + prevYear,
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=hitting&season=' + prevYear + '&gameType=R'
-  ];
-  for (var ui = 0; ui < urlSets.length; ui++) {
+
+  var parseTeam = function(data) {
+    var statsArr = ((data||{}).stats)||[];
+    if (!statsArr.length) return null;
+    var splits = statsArr[0].splits||[];
+    if (!splits.length) return null;
+    var s = splits[0].stat||{};
+    var pa = parseFloat(s.plateAppearances||0);
+    var gp = parseFloat(s.gamesPlayed||0);
+    if (pa < 1) return null;
+    var avg = parseFloat(s.avg||'.250');
+    var slg = parseFloat(s.slg||'.400');
+    var obp = parseFloat(s.obp||'.320');
+    return {
+      gp: gp, pa: pa, avg: avg, obp: obp, slg: slg,
+      ops: parseFloat(s.ops||'.720'),
+      kpct:  parseFloat(s.strikeOuts||0) / Math.max(1,pa),
+      bbpct: parseFloat(s.baseOnBalls||0) / Math.max(1,pa),
+      iso:   Math.max(0, slg-avg),
+      runs:  parseFloat(s.runs||0)
+    };
+  };
+
+  // Fetch both years in parallel — try with and without gameType=R
+  var results = await Promise.all([
+    fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=season&group=hitting&season='+year+'&gameType=R').catch(function(){return null;}),
+    fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=season&group=hitting&season='+prevYear+'&gameType=R').catch(function(){return null;})
+  ]);
+
+  var cur  = parseTeam(results[0]);
+  var prev = parseTeam(results[1]);
+
+  // If prior year gameType=R failed, try full season
+  if (!prev) {
     try {
-      var data = await fetchJSON(urlSets[ui]);
-      // Check if response has real data
-      var statsArr = data.stats || [];
-      if (!statsArr.length) continue;
-      var splits = statsArr[0].splits || [];
-      if (!splits.length) continue;
-      var s = splits[0].stat || {};
-      var gp = parseFloat(s.gamesPlayed || 0);
-      var pa = parseFloat(s.plateAppearances || 0);
-      if (gp < 1 || pa < 10) continue; // empty season data
-      var avg = parseFloat(s.avg||'.250'), slg = parseFloat(s.slg||'.400'), obp = parseFloat(s.obp||'.320');
-      return {
-        avg: avg, obp: obp, slg: slg, ops: parseFloat(s.ops||'.720'),
-        woba: obp * 0.9 + slg * 0.3,
-        kpct: parseFloat(s.strikeOuts||0) / Math.max(1, pa),
-        bbpct: parseFloat(s.baseOnBalls||0) / Math.max(1, pa),
-        iso: Math.max(0, slg - avg),
-        runsPerGame: parseFloat(s.runs||0) / Math.max(1, gp)
-      };
-    } catch(e) { continue; }
+      var d = await fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=season&group=hitting&season='+prevYear);
+      prev = parseTeam(d);
+    } catch(e) {}
   }
-  return null;
+
+  if (!prev && !cur) return null;
+  if (!cur || cur.pa < 1) return prev ? {
+    avg: prev.avg, obp: prev.obp, slg: prev.slg, ops: prev.ops,
+    woba: prev.obp*0.9+prev.slg*0.3, kpct: prev.kpct, bbpct: prev.bbpct,
+    iso: prev.iso, runsPerGame: prev.runs/Math.max(1,prev.gp)
+  } : null;
+  if (!prev) return {
+    avg: cur.avg, obp: cur.obp, slg: cur.slg, ops: cur.ops,
+    woba: cur.obp*0.9+cur.slg*0.3, kpct: cur.kpct, bbpct: cur.bbpct,
+    iso: cur.iso, runsPerGame: cur.runs/Math.max(1,cur.gp)
+  };
+
+  // Marcel blend: games / (games + 30)
+  // At 30 GP = 50/50, at 60 GP = 67% current, at 100 GP = 77% current
+  var REGRESS_GP = 30;
+  var curW  = cur.gp;
+  var prevW = REGRESS_GP;
+  var total = curW + prevW;
+  var blendVal = function(c, p) { return (c*curW + p*prevW) / total; };
+
+  return {
+    avg:  parseFloat(blendVal(cur.avg,   prev.avg).toFixed(3)),
+    obp:  parseFloat(blendVal(cur.obp,   prev.obp).toFixed(3)),
+    slg:  parseFloat(blendVal(cur.slg,   prev.slg).toFixed(3)),
+    ops:  parseFloat(blendVal(cur.ops,   prev.ops).toFixed(3)),
+    woba: parseFloat((blendVal(cur.obp,prev.obp)*0.9+blendVal(cur.slg,prev.slg)*0.3).toFixed(3)),
+    kpct: parseFloat(blendVal(cur.kpct,  prev.kpct).toFixed(3)),
+    bbpct:parseFloat(blendVal(cur.bbpct, prev.bbpct).toFixed(3)),
+    iso:  parseFloat(blendVal(cur.iso,   prev.iso).toFixed(3)),
+    runsPerGame: parseFloat(blendVal(
+      cur.runs/Math.max(1,cur.gp),
+      prev.runs/Math.max(1,prev.gp)
+    ).toFixed(2))
+  };
 }
 
 async function fetchTeamPlatoonStats(teamId, vsHand) {
@@ -882,60 +947,99 @@ async function fetchTeamPlatoonStats(teamId, vsHand) {
   var sitCode = vsHand === 'R' ? 'vr' : 'vl';
   var year = new Date().getFullYear();
   var prevYear = year - 1;
-  var urlSets = [
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=statSplits&group=hitting&season=' + year + '&sitCodes=' + sitCode,
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=statSplits&group=hitting&season=' + year + '&sitCodes=' + sitCode + '&gameType=R',
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=statSplits&group=hitting&season=' + year + '&sitCodes=' + sitCode + '&gameType=S',
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=statSplits&group=hitting&season=' + prevYear + '&sitCodes=' + sitCode,
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=statSplits&group=hitting&season=' + prevYear + '&sitCodes=' + sitCode + '&gameType=R'
-  ];
-  for (var ui = 0; ui < urlSets.length; ui++) {
+
+  var parsePlat = function(data) {
+    var statsArr = ((data||{}).stats)||[];
+    if (!statsArr.length) return null;
+    var splits = statsArr[0].splits||[];
+    if (!splits.length) return null;
+    var s = splits[0].stat||{};
+    var pa = parseFloat(s.plateAppearances||0);
+    if (pa < 1) return null;
+    var avg = parseFloat(s.avg||'.250'), slg = parseFloat(s.slg||'.400');
+    return {
+      pa: pa,
+      ops:  parseFloat(s.ops||'.720'),
+      obp:  parseFloat(s.obp||'.320'),
+      slg:  slg,
+      kpct: parseFloat(s.strikeOuts||0)/Math.max(1,pa),
+      iso:  Math.max(0, slg-avg)
+    };
+  };
+
+  var results = await Promise.all([
+    fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=statSplits&group=hitting&season='+year+'&sitCodes='+sitCode+'&gameType=R').catch(function(){return null;}),
+    fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=statSplits&group=hitting&season='+prevYear+'&sitCodes='+sitCode+'&gameType=R').catch(function(){return null;})
+  ]);
+
+  var cur  = parsePlat(results[0]);
+  var prev = parsePlat(results[1]);
+  if (!prev) {
     try {
-      var data = await fetchJSON(urlSets[ui]);
-      var statsArr = data.stats || [];
-      if (!statsArr.length) continue;
-      var splits = statsArr[0].splits || [];
-      if (!splits.length) continue;
-      var s = splits[0].stat || {};
-      var pa = parseFloat(s.plateAppearances||0);
-      if (pa < 10) continue;
-      var avg = parseFloat(s.avg||'.250'), slg = parseFloat(s.slg||'.400');
-      return {
-        ops: parseFloat(s.ops||'.720'), obp: parseFloat(s.obp||'.320'), slg: slg,
-        kpct: parseFloat(s.strikeOuts||0) / Math.max(1, pa),
-        iso: Math.max(0, slg - avg)
-      };
-    } catch(e) { continue; }
+      var d = await fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=statSplits&group=hitting&season='+prevYear+'&sitCodes='+sitCode);
+      prev = parsePlat(d);
+    } catch(e) {}
   }
-  return null;
+
+  if (!prev && !cur) return null;
+  if (!cur || cur.pa < 1) return prev;
+  if (!prev) return cur;
+
+  var REGRESS_PA = 200; // platoon splits need more PA to stabilize
+  var curW = cur.pa, prevW = REGRESS_PA, total = curW + prevW;
+  var blendVal = function(c, p) { return (c*curW + p*prevW) / total; };
+
+  return {
+    ops:  parseFloat(blendVal(cur.ops,  prev.ops).toFixed(3)),
+    obp:  parseFloat(blendVal(cur.obp,  prev.obp).toFixed(3)),
+    slg:  parseFloat(blendVal(cur.slg,  prev.slg).toFixed(3)),
+    kpct: parseFloat(blendVal(cur.kpct, prev.kpct).toFixed(3)),
+    iso:  parseFloat(blendVal(cur.iso,  prev.iso).toFixed(3))
+  };
 }
 
 async function fetchBullpenStats(teamId) {
   if (!teamId) return null;
   var year = new Date().getFullYear();
   var prevYear = year - 1;
-  var urlSets = [
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + year,
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + year + '&gameType=R',
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + year + '&gameType=S',
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + prevYear,
-    CFG.MLB_BASE + '/teams/' + teamId + '/stats?stats=season&group=pitching&season=' + prevYear + '&gameType=R'
-  ];
-  for (var ui = 0; ui < urlSets.length; ui++) {
+
+  var parseBP = function(data) {
+    var statsArr = ((data||{}).stats)||[];
+    if (!statsArr.length) return null;
+    var splits = statsArr[0].splits||[];
+    if (!splits.length) return null;
+    var s = splits[0].stat||{};
+    var ip = parseFloat(s.inningsPitched||0);
+    if (ip < 1) return null;
+    return { ip: ip, era: parseFloat(s.era||'4.00'), whip: parseFloat(s.whip||'1.25') };
+  };
+
+  var results = await Promise.all([
+    fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=season&group=pitching&season='+year+'&gameType=R').catch(function(){return null;}),
+    fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=season&group=pitching&season='+prevYear+'&gameType=R').catch(function(){return null;})
+  ]);
+
+  var cur  = parseBP(results[0]);
+  var prev = parseBP(results[1]);
+  if (!prev) {
     try {
-      var data = await fetchJSON(urlSets[ui]);
-      var statsArr = data.stats || [];
-      if (!statsArr.length) continue;
-      var splits = statsArr[0].splits || [];
-      if (!splits.length) continue;
-      var s = splits[0].stat || {};
-      var ip = parseFloat(s.inningsPitched||0);
-      var gp = parseFloat(s.gamesPlayed||0);
-      if (ip < 10 || gp < 1) continue;
-      return { era: parseFloat(s.era||'4.00'), whip: parseFloat(s.whip||'1.25'), ip: ip };
-    } catch(e) { continue; }
+      var d = await fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=season&group=pitching&season='+prevYear);
+      prev = parseBP(d);
+    } catch(e) {}
   }
-  return null;
+
+  if (!prev && !cur) return null;
+  if (!cur || cur.ip < 1) return prev;
+  if (!prev) return cur;
+
+  // Blend bullpen with IP regression constant of 40
+  var REGRESS_IP = 40;
+  var curW = cur.ip, prevW = REGRESS_IP, total = curW + prevW;
+  return {
+    era:  parseFloat(((cur.era*curW  + prev.era*prevW)  / total).toFixed(2)),
+    whip: parseFloat(((cur.whip*curW + prev.whip*prevW) / total).toFixed(2)),
+    ip: cur.ip
+  };
 }
 
 async function fetchRecentGameLog(teamId) {
