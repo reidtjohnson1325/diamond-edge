@@ -729,26 +729,47 @@ async function fetchPitcherStats(personId) {
   var year = new Date().getFullYear();
   var seasons = [year, year - 1];
   for (var si = 0; si < seasons.length; si++) {
+    // Use stats=season only — seasonAdvanced causes errors on some endpoints
     var url = CFG.MLB_BASE + '/people/' + personId +
-      '/stats?stats=season,seasonAdvanced&group=pitching&season=' + seasons[si];
+      '/stats?stats=season&group=pitching&season=' + seasons[si];
     try {
       var data = await fetchJSON(url);
+      var splits = [];
+      (data.stats||[]).forEach(function(s){
+        (s.splits||[]).forEach(function(sp){ splits.push(sp.stat||{}); });
+      });
+      if (!splits.length) continue;
       var out = {};
-      (data.stats||[]).forEach(function(s){ (s.splits||[]).forEach(function(sp){ Object.assign(out, sp.stat); }); });
-      if (!out.inningsPitched) continue;
-      var ip    = parseFloat(out.inningsPitched)||1;
+      splits.forEach(function(s){ Object.assign(out, s); });
+      var ip = parseFloat(out.inningsPitched)||0;
+      if (ip < 5) continue;
       var era   = parseFloat(out.era)||4.50;
       var whip  = parseFloat(out.whip)||1.30;
-      var kPer9 = out.strikeoutsPer9Inn ? parseFloat(out.strikeoutsPer9Inn) : parseFloat(out.strikeOuts||0)/ip*9;
-      var bbPer9= out.walksPer9Inn      ? parseFloat(out.walksPer9Inn)      : parseFloat(out.baseOnBalls||0)/ip*9;
-      var kpct  = kPer9/9/4.3;
-      var bbpct = bbPer9/9/4.3;
-      var hrPer9= parseFloat(out.homeRuns||0)/ip*9;
-      var xfip  = Math.max(1.5,Math.min(7.0,((13*(hrPer9/9*ip)+3*(parseFloat(out.baseOnBalls||0)+parseFloat(out.hitByPitch||0))-2*parseFloat(out.strikeOuts||0))/ip)+3.10));
-      return { era:era, whip:whip, kPer9:kPer9, bbPer9:bbPer9, kpct:kpct, bbpct:bbpct,
-               kbb:kpct-bbpct, xfip:xfip, ip:ip, strikeOuts:parseInt(out.strikeOuts||0),
-               inningsPitched:ip, veloTrend:'stable' };
-    } catch(e){ continue; }
+      var so    = parseFloat(out.strikeOuts||0);
+      var bb    = parseFloat(out.baseOnBalls||0);
+      var hr    = parseFloat(out.homeRuns||0);
+      var hbp   = parseFloat(out.hitByPitch||0);
+      var kPer9 = ip > 0 ? so / ip * 9 : 0;
+      var bbPer9= ip > 0 ? bb / ip * 9 : 0;
+      var kpct  = kPer9 / (kPer9 + 27); // rough conversion
+      var bbpct = bbPer9 / (bbPer9 + 27);
+      var xfip  = Math.max(1.5, Math.min(7.5,
+        ((13 * hr + 3 * (bb + hbp) - 2 * so) / ip) + 3.10
+      ));
+      return {
+        era: era, whip: whip,
+        kPer9: parseFloat(kPer9.toFixed(2)),
+        bbPer9: parseFloat(bbPer9.toFixed(2)),
+        kpct: parseFloat((so / (ip * 3 + bb + so) || 0.22).toFixed(3)),
+        bbpct: parseFloat((bb / (ip * 3 + bb + so) || 0.08).toFixed(3)),
+        kbb: parseFloat(((so - bb) / (ip * 3 + bb + so) || 0.14).toFixed(3)),
+        xfip: parseFloat(xfip.toFixed(2)),
+        ip: ip,
+        strikeOuts: Math.round(so),
+        inningsPitched: ip,
+        veloTrend: 'stable'
+      };
+    } catch(e) { continue; }
   }
   return null;
 }
@@ -793,43 +814,7 @@ function loadWeather(venue) {
 
 // ── NEW API FETCH FUNCTIONS ──────────────────────────────────────
 
-async function fetchPitcherStats(personId) {
-  if (!personId) return null;
-  var url = CFG.MLB_BASE + '/people/' + personId +
-    '/stats?stats=season,seasonAdvanced&group=pitching&season=' + new Date().getFullYear();
-  try {
-    var data = await fetchJSON(url);
-    var splits = [];
-    (data.stats || []).forEach(function(s) {
-      (s.splits || []).forEach(function(sp) { splits.push({type: s.type.displayName, stat: sp.stat}); });
-    });
-    // Merge season + advanced into one object
-    var out = {};
-    splits.forEach(function(s) { Object.assign(out, s.stat); });
-    if (!out.inningsPitched) return null;
-    var ip = parseFloat(out.inningsPitched) || 1;
-    var era  = parseFloat(out.era) || 4.50;
-    var whip = parseFloat(out.whip) || 1.30;
-    var kPer9 = out.strikeoutsPer9Inn ? parseFloat(out.strikeoutsPer9Inn) : (parseFloat(out.strikeOuts||0)/ip*9);
-    var bbPer9= out.walksPer9Inn      ? parseFloat(out.walksPer9Inn)      : (parseFloat(out.baseOnBalls||0)/ip*9);
-    var kpct  = out.strikeoutPercentage  ? parseFloat(out.strikeoutPercentage)/100  : kPer9/9/4.3;
-    var bbpct = out.walkPercentage       ? parseFloat(out.walkPercentage)/100       : bbPer9/9/4.3;
-    var kbb   = kpct - bbpct;
-    // xFIP proxy: league avg HR/FB ~10.5%, regress toward mean
-    var hrPer9 = parseFloat(out.homeRunsPer9Inn || out.homeRuns || 0) / ip * 9;
-    var xfip = ((13*(hrPer9/9*ip) + 3*(parseFloat(out.baseOnBalls||0)+parseFloat(out.hitByPitch||0)) - 2*parseFloat(out.strikeOuts||0)) / ip) + 3.10;
-    xfip = Math.max(1.5, Math.min(7.0, xfip));
-    // Velocity — placeholder until Savant wired; use K/9 as proxy signal
-    var veloTrend = 'stable';
-    return {
-      era: era, whip: whip, kPer9: kPer9, bbPer9: bbPer9,
-      kpct: kpct, bbpct: bbpct, kbb: kbb, xfip: xfip,
-      ip: ip, veloTrend: veloTrend,
-      strikeOuts: parseInt(out.strikeOuts||0),
-      inningsPitched: ip
-    };
-  } catch(e) { return null; }
-}
+// [old duplicate fetchPitcherStats removed]
 
 async function fetchPitcherFirstInnStats(personId) {
   if (!personId) return null;
