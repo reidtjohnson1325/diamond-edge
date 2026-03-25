@@ -1510,9 +1510,9 @@ async function fetchRoster(teamId) {
 
 async function fetchBvPSplit(pitcherId, batterId) {
   // Use career stats — no season filter so we get all historical matchup data
+  // Career vsPlayer — no season filter returns all-time matchup history
   var url = CFG.MLB_BASE + '/people/' + pitcherId + '/stats' +
-    '?stats=vsPlayer&group=pitching&opposingPlayerId=' + batterId +
-    '&sitCodes=&gameType=R';
+    '?stats=vsPlayer&group=pitching&opposingPlayerId=' + batterId;
   try {
     var data = await fetchJSON(url);
     var stats = data.stats || [];
@@ -1560,15 +1560,11 @@ async function loadBvPForGames(games) {
 
   for (var i = 0; i < games.length; i++) {
     var game = games[i];
-    var rawGame = game._raw || {};
-    var awayTeamId = ((rawGame.teams || {}).away || {}).team
-      ? rawGame.teams.away.team.id : null;
-    var homeTeamId = ((rawGame.teams || {}).home || {}).team
-      ? rawGame.teams.home.team.id : null;
-    var awayPitcherId = ((rawGame.teams || {}).away || {}).probablePitcher
-      ? rawGame.teams.away.probablePitcher.id : null;
-    var homePitcherId = ((rawGame.teams || {}).home || {}).probablePitcher
-      ? rawGame.teams.home.probablePitcher.id : null;
+    // Use the processed IDs from buildGameFromAPI (parentOrgId already applied)
+    var awayTeamId  = game.awayTeamId;
+    var homeTeamId  = game.homeTeamId;
+    var awayPitcherId = game.awayPitcherId;
+    var homePitcherId = game.homePitcherId;
 
     if (!awayPitcherId && !homePitcherId) continue;
 
