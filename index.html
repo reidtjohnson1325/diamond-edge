@@ -1467,7 +1467,8 @@ async function scoreAndAttach(game, umpMap) {
   // Update flags
   game.flags.bullpenTired  = scored.flags.bpTired;
   game.flags.correlation   = scored.flags.correlation;
-  if (scored.flags.spElite) game.flags.umpFlag = true;
+  // Only set umpFlag if a real ump was matched (not the default fallback)
+  if (scored.flags.spElite && ump && ump.name && ump.name !== 'Jeff Nelson') game.flags.umpFlag = true;
 
   // Bullpen rest display
   game.bullpenRest = {
@@ -2310,10 +2311,11 @@ function renderTodayPicker() {
       '<span class="tpr-conf '+cc+'">'+p.conf+'</span>' +
       '<span class="tpr-score">'+p.score+'</span>' +
       (isLogged ? loggedHtml : inputHtml);
+    // Attach events directly to elements within this row
     (function(idx, pid, match, type, play, score, conf) {
-      var chkEl = document.getElementById('chk-'+idx);
+      var chkEl = row.querySelector('.tpr-check');
       if (chkEl) chkEl.onclick = function() { togglePlay(idx, pid); };
-      var lockEl = document.getElementById('lock-'+idx);
+      var lockEl = row.querySelector('.tpr-lock-btn');
       if (lockEl) lockEl.onclick = function() { lockPlay(idx, pid, match, type, play, score, conf); };
     }(i, playId, g.away+' @ '+g.home, p.type, p.play.replace(/['\"/]/g,''), p.score, p.conf));
     list.appendChild(row);
