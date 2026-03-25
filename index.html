@@ -1487,24 +1487,39 @@ function sleep(ms) {
 }
 
 async function fetchRoster(teamId) {
-  // Try active 26-man roster first, fall back to 40-man
-  var rosterTypes = ['active', 'fullRoster', '40Man'];
-  for (var ri = 0; ri < rosterTypes.length; ri++) {
+  if (!teamId) return [];
+  // Try multiple roster types and formats
+  var attempts = [
+    CFG.MLB_BASE + '/teams/' + teamId + '/roster?rosterType=active&hydrate=person&season=' + new Date().getFullYear(),
+    CFG.MLB_BASE + '/teams/' + teamId + '/roster?rosterType=active&hydrate=person',
+    CFG.MLB_BASE + '/teams/' + teamId + '/roster?rosterType=40Man&hydrate=person&season=' + new Date().getFullYear(),
+    CFG.MLB_BASE + '/teams/' + teamId + '/roster/active?hydrate=person',
+    CFG.MLB_BASE + '/teams/' + teamId + '/roster?rosterType=fullRoster&hydrate=person'
+  ];
+  for (var ri = 0; ri < attempts.length; ri++) {
     try {
-      var url = CFG.MLB_BASE + '/teams/' + teamId + '/roster?rosterType=' + rosterTypes[ri] + '&hydrate=person';
-      var data = await fetchJSON(url);
-      var batters = (data.roster || []).map(function(r) {
-        return {
-          id: (r.person || {}).id,
-          name: (r.person || {}).fullName || '',
-          pos: (r.position || {}).abbreviation || ''
-        };
+      var data = await fetchJSON(attempts[ri]);
+      var roster = data.roster || [];
+      if (!roster.length) continue;
+      var batters = roster.map(function(r) {
+        var person = r.person || {};
+        var pos = (r.position || {}).abbreviation || (r.status || {}).code || '';
+        return { id: person.id, name: person.fullName || '', pos: pos };
       }).filter(function(p) {
-        return p.id && p.pos !== 'P' && p.pos !== 'TWP';
+        // Keep non-pitchers — pitchers have pos P, SP, RP, or status code P
+        var isP = p.pos === 'P' || p.pos === 'SP' || p.pos === 'RP' || p.pos === 'TWP';
+        return p.id && !isP;
       });
-      if (batters.length >= 5) return batters;
-    } catch(e) { continue; }
+      if (batters.length >= 3) {
+        console.log('Roster loaded for team', teamId, ':', batters.length, 'batters via', attempts[ri].split('?')[1]);
+        return batters;
+      }
+    } catch(e) {
+      console.warn('Roster attempt', ri, 'failed for team', teamId, ':', e.message);
+      continue;
+    }
   }
+  console.warn('All roster attempts failed for team', teamId);
   return [];
 }
 
@@ -1566,10 +1581,20 @@ async function loadBvPForGames(games) {
     var awayPitcherId = game.awayPitcherId;
     var homePitcherId = game.homePitcherId;
 
-    if (!awayPitcherId && !homePitcherId) continue;
+    console.log('BvP game:', game.away, '@', game.home,
+      '| Away pitcher ID:', awayPitcherId,
+      '| Home pitcher ID:', homePitcherId,
+      '| Away team ID:', awayTeamId,
+      '| Home team ID:', homeTeamId);
+
+    if (!awayPitcherId && !homePitcherId) {
+      console.warn('No pitcher IDs found for', game.away, '@', game.home, '- skipping BvP');
+      continue;
+    }
 
     var awayBatters = awayTeamId ? await fetchRoster(awayTeamId) : [];
     var homeBatters = homeTeamId ? await fetchRoster(homeTeamId) : [];
+    console.log('Batters fetched:', awayBatters.length, 'away,', homeBatters.length, 'home');
     await sleep(150);
 
     var bvpResults = [];
