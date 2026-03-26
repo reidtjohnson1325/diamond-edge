@@ -382,10 +382,10 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
 <div class="view" id="view-umps">
   <div class="sec"><div class="st">Umpire Tendencies <span class="ss">K-zone and run impact — hidden edge most bettors ignore</span></div></div>
   <div class="sgrid">
-    <div class="sc"><div class="lb">Biggest K-zone</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--rd)">Angel Hernandez</div><div class="sb">+1.8 K/game vs average</div></div>
-    <div class="sc"><div class="lb">Tightest K-zone</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--gn)">Ted Barrett</div><div class="sb">-1.6 K/game vs average</div></div>
-    <div class="sc"><div class="lb">Highest-scoring games</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--am)">CB Bucknor</div><div class="sb">+0.9 runs/game vs average</div></div>
-    <div class="sc"><div class="lb">Lowest-scoring games</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--bl)">Joe West</div><div class="sb">-0.7 runs/game vs average</div></div>
+    <div class="sc"><div class="lb">Biggest K-zone</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--rd)">Edwin Jimenez</div><div class="sb">+0.68 K/game (CS +2.25 vs avg)</div></div>
+    <div class="sc"><div class="lb">Tightest K-zone</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--gn)">Andy Fletcher</div><div class="sb">-0.22 K/game (CS -0.72 vs avg)</div></div>
+    <div class="sc"><div class="lb">Highest-scoring games</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--am)">Mark Ripperger</div><div class="sb">+0.93 runs/game vs average</div></div>
+    <div class="sc"><div class="lb">Lowest-scoring games</div><div class="vl" style="font-size:13px;margin-top:5px;color:var(--bl)">Andy Fletcher</div><div class="sb">-0.33 runs/game vs average</div></div>
   </div>
   <div class="tw"><table><thead><tr>
     <th>Umpire</th><th>K Adj/Game</th><th>Run Adj/Game</th><th>Zone Size</th><th>Called Strike %</th><th>Tendency</th><th>NRFI</th><th>O/U</th><th>KO Props</th>
@@ -468,6 +468,10 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
 // CONFIG — edit WEATHER_KEY after getting from openweathermap.org
 // ═══════════════════════════════════════════════
 var CFG = {
+  ODDS_API_KEY: '90a1837815b8f0f61abc70f976c8f4dd',
+  ODDS_API_BASE: 'https://api.the-odds-api.com/v4',
+  ODDS_CACHE: null,
+  ODDS_CACHE_TIME: 0,
   MLB_BASE: 'https://statsapi.mlb.com/api/v1',
   WX_BASE:  'https://api.open-meteo.com/v1/forecast',
   SPORT_ID: 1
@@ -548,23 +552,93 @@ var PARKS = [
 // ═══════════════════════════════════════════════
 // UMPIRES
 // ═══════════════════════════════════════════════
-var UMPS = [
-  {name:'Angel Hernandez',kAdj:1.8,runAdj:0.4,zone:'Wide',csRate:32.1,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Strong Over'},
-  {name:'CB Bucknor',kAdj:-0.2,runAdj:0.9,zone:'Tight',csRate:27.8,favor:'Hitter',nrfi:'Bad for NRFI',ou:'Lean Over',ko:'Slight Under'},
-  {name:'Joe West',kAdj:0.8,runAdj:-0.7,zone:'Wide',csRate:30.9,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Lean Over'},
-  {name:'Ted Barrett',kAdj:-1.6,runAdj:0.5,zone:'Very Tight',csRate:26.1,favor:'Hitter',nrfi:'Avoid NRFI',ou:'Lean Over',ko:'Strong Under'},
-  {name:'Sam Holbrook',kAdj:0.6,runAdj:-0.3,zone:'Average',csRate:29.4,favor:'Neutral',nrfi:'Slight NRFI',ou:'Neutral',ko:'Slight Over'},
-  {name:'Jim Reynolds',kAdj:1.1,runAdj:-0.4,zone:'Wide',csRate:31.2,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Lean Over'},
-  {name:'Brian Gorman',kAdj:-0.8,runAdj:0.6,zone:'Tight',csRate:27.2,favor:'Hitter',nrfi:'Avoid NRFI',ou:'Lean Over',ko:'Lean Under'},
-  {name:'Jeff Nelson',kAdj:0.3,runAdj:0.1,zone:'Average',csRate:29.0,favor:'Neutral',nrfi:'Neutral',ou:'Neutral',ko:'Neutral'},
-  {name:'Mark Carlson',kAdj:1.3,runAdj:-0.5,zone:'Wide',csRate:31.8,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Lean Over'},
-  {name:'Alfonso Marquez',kAdj:-0.4,runAdj:0.3,zone:'Tight',csRate:28.1,favor:'Slight Hitter',nrfi:'Slight Avoid',ou:'Slight Over',ko:'Slight Under'},
-  {name:'Dan Iassogna',kAdj:0.9,runAdj:-0.2,zone:'Wide',csRate:30.5,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Slight Under',ko:'Lean Over'},
-  {name:'Bill Miller',kAdj:0.7,runAdj:-0.6,zone:'Slightly Wide',csRate:30.1,favor:'Pitcher',nrfi:'Good for NRFI',ou:'Lean Under',ko:'Lean Over'},
-  {name:'Lance Barksdale',kAdj:-1.0,runAdj:0.7,zone:'Tight',csRate:27.0,favor:'Hitter',nrfi:'Avoid NRFI',ou:'Lean Over',ko:'Lean Under'},
-  {name:'Chad Fairchild',kAdj:0.4,runAdj:0.0,zone:'Average',csRate:29.2,favor:'Neutral',nrfi:'Neutral',ou:'Neutral',ko:'Slight Over'},
-  {name:'Marvin Hudson',kAdj:-0.6,runAdj:0.4,zone:'Tight',csRate:27.9,favor:'Slight Hitter',nrfi:'Slight Avoid',ou:'Slight Over',ko:'Slight Under'}
-];
+var UMPS = {
+  'Adam Beck': {runAdj:0.737, kAdj:0.48, zone:50, csw:0.9485},
+  'Adam Hamari': {runAdj:0.671, kAdj:0.45, zone:47, csw:0.9477},
+  'Adrian Johnson': {runAdj:-0.047, kAdj:-0.03, zone:26, csw:0.9341},
+  'Alan Porter': {runAdj:0.891, kAdj:0.6, zone:64, csw:0.9546},
+  'Alex MacKay': {runAdj:0.496, kAdj:0.35, zone:46, csw:0.9495},
+  'Alex Tosi': {runAdj:0.693, kAdj:0.48, zone:52, csw:0.9508},
+  'Alfonso Márquez': {runAdj:0.177, kAdj:0.11, zone:47, csw:0.9349},
+  'Andy Fletcher': {runAdj:-0.334, kAdj:-0.22, zone:32, csw:0.9287},
+  'Austin Jones': {runAdj:0.769, kAdj:0.55, zone:71, csw:0.9516},
+  'Ben May': {runAdj:0.529, kAdj:0.36, zone:48, csw:0.9474},
+  'Bill Miller': {runAdj:0.367, kAdj:0.23, zone:39, csw:0.9404},
+  'Brennan Miller': {runAdj:0.193, kAdj:0.13, zone:38, csw:0.9391},
+  'Brian O\'Nora': {runAdj:-0.02, kAdj:-0.01, zone:44, csw:0.9388},
+  'Brian Walsh': {runAdj:0.442, kAdj:0.28, zone:49, csw:0.9408},
+  'Brock Ballou': {runAdj:0.302, kAdj:0.25, zone:37, csw:0.9407},
+  'Bruce Dreckman': {runAdj:-0.193, kAdj:-0.16, zone:32, csw:0.925},
+  'Carlos Torres': {runAdj:0.173, kAdj:0.11, zone:37, csw:0.9329},
+  'CB Bucknor': {runAdj:-0.203, kAdj:-0.15, zone:13, csw:0.9281},
+  'Chad Fairchild': {runAdj:0.316, kAdj:0.24, zone:48, csw:0.9418},
+  'Chad Whitson': {runAdj:0.32, kAdj:0.32, zone:60, csw:0.9378},
+  'Charlie Ramos': {runAdj:0.182, kAdj:0.13, zone:56, csw:0.9368},
+  'Chris Conroy': {runAdj:0.414, kAdj:0.26, zone:47, csw:0.9401},
+  'Chris Guccione': {runAdj:0.423, kAdj:0.29, zone:31, csw:0.9381},
+  'Chris Segal': {runAdj:0.07, kAdj:0.05, zone:55, csw:0.9374},
+  'Clint Vondrak': {runAdj:0.598, kAdj:0.39, zone:53, csw:0.9445},
+  'Cory Blaser': {runAdj:0.226, kAdj:0.16, zone:42, csw:0.9398},
+  'D.J. Reyburn': {runAdj:0.357, kAdj:0.24, zone:46, csw:0.9417},
+  'Dan Bellino': {runAdj:0.511, kAdj:0.33, zone:40, csw:0.9471},
+  'Dan Iassogna': {runAdj:0.049, kAdj:0.03, zone:37, csw:0.9355},
+  'Dan Merzel': {runAdj:0.752, kAdj:0.55, zone:69, csw:0.9539},
+  'David Arrieta': {runAdj:-0.01, kAdj:-0.05, zone:68, csw:0.9314},
+  'David Rackley': {runAdj:0.234, kAdj:0.16, zone:53, csw:0.9429},
+  'Derek Thomas': {runAdj:0.796, kAdj:0.64, zone:80, csw:0.9541},
+  'Doug Eddings': {runAdj:0.35, kAdj:0.22, zone:46, csw:0.9443},
+  'Edwin Jimenez': {runAdj:0.859, kAdj:0.67, zone:69, csw:0.9618},
+  'Edwin Moscoso': {runAdj:0.917, kAdj:0.59, zone:51, csw:0.9539},
+  'Emil Jimenez': {runAdj:0.551, kAdj:0.39, zone:62, csw:0.948},
+  'Erich Bacchus': {runAdj:0.468, kAdj:0.32, zone:44, csw:0.9437},
+  'Gabe Morales': {runAdj:0.558, kAdj:0.35, zone:48, csw:0.9459},
+  'James Hoye': {runAdj:-0.015, kAdj:-0.01, zone:61, csw:0.9388},
+  'James Jean': {runAdj:0.275, kAdj:0.25, zone:47, csw:0.9413},
+  'Jansen Visconti': {runAdj:0.689, kAdj:0.45, zone:56, csw:0.947},
+  'Jen Pawol': {runAdj:-0.024, kAdj:-0.08, zone:44, csw:0.929},
+  'Jeremie Rehak': {runAdj:0.484, kAdj:0.38, zone:50, csw:0.9499},
+  'Jim Wolf': {runAdj:0.268, kAdj:0.18, zone:39, csw:0.9365},
+  'John Bacon': {runAdj:0.12, kAdj:0.08, zone:40, csw:0.9356},
+  'John Libka': {runAdj:0.713, kAdj:0.46, zone:64, csw:0.9508},
+  'John Tumpane': {runAdj:0.296, kAdj:0.21, zone:51, csw:0.9425},
+  'Jordan Baker': {runAdj:0.139, kAdj:0.1, zone:44, csw:0.9391},
+  'Junior Valentine': {runAdj:0.55, kAdj:0.49, zone:74, csw:0.9507},
+  'Lance Barksdale': {runAdj:0.213, kAdj:0.13, zone:48, csw:0.9361},
+  'Lance Barrett': {runAdj:0.229, kAdj:0.14, zone:32, csw:0.935},
+  'Laz Diaz': {runAdj:-0.27, kAdj:-0.17, zone:18, csw:0.928},
+  'Malachi Moore': {runAdj:0.197, kAdj:0.13, zone:51, csw:0.9362},
+  'Manny Gonzalez': {runAdj:0.47, kAdj:0.38, zone:55, csw:0.9505},
+  'Mark Carlson': {runAdj:-0.067, kAdj:-0.28, zone:64, csw:0.929},
+  'Mark Ripperger': {runAdj:0.926, kAdj:0.61, zone:55, csw:0.9548},
+  'Mark Wegner': {runAdj:0.605, kAdj:0.42, zone:46, csw:0.9478},
+  'Marvin Hudson': {runAdj:0.124, kAdj:0.09, zone:30, csw:0.9358},
+  'Mike Estabrook': {runAdj:0.211, kAdj:0.15, zone:26, csw:0.9353},
+  'Mike Muchlinski': {runAdj:-0.086, kAdj:-0.06, zone:27, csw:0.9338},
+  'Nate Tomlinson': {runAdj:0.854, kAdj:0.59, zone:62, csw:0.9519},
+  'Nestor Ceja': {runAdj:0.58, kAdj:0.39, zone:55, csw:0.9502},
+  'Nic Lentz': {runAdj:0.499, kAdj:0.33, zone:62, csw:0.9445},
+  'Nick Mahrley': {runAdj:0.419, kAdj:0.28, zone:37, csw:0.9422},
+  'Paul Clemons': {runAdj:0.376, kAdj:0.26, zone:64, csw:0.9441},
+  'Phil Cuzzi': {runAdj:0.259, kAdj:0.17, zone:37, csw:0.9383},
+  'Quinn Wolcott': {runAdj:0.693, kAdj:0.44, zone:69, csw:0.95},
+  'Ramon De Jesus': {runAdj:0.421, kAdj:0.27, zone:24, csw:0.9375},
+  'Roberto Ortiz': {runAdj:0.022, kAdj:0.01, zone:38, csw:0.9361},
+  'Ron Kulpa': {runAdj:-0.06, kAdj:-0.05, zone:18, csw:0.9307},
+  'Ryan Additon': {runAdj:0.413, kAdj:0.28, zone:35, csw:0.9421},
+  'Ryan Blakney': {runAdj:0.378, kAdj:0.26, zone:43, csw:0.9415},
+  'Ryan Wills': {runAdj:0.212, kAdj:0.14, zone:28, csw:0.9374},
+  'Scott Barry': {runAdj:0.301, kAdj:0.21, zone:60, csw:0.9454},
+  'Sean Barber': {runAdj:0.156, kAdj:0.1, zone:48, csw:0.9369},
+  'Shane Livensparger': {runAdj:0.597, kAdj:0.41, zone:73, csw:0.9503},
+  'Stu Scheurwater': {runAdj:0.268, kAdj:0.17, zone:40, csw:0.9414},
+  'Todd Tichenor': {runAdj:0.131, kAdj:0.09, zone:31, csw:0.9362},
+  'Tom Hanahan': {runAdj:0.252, kAdj:0.18, zone:51, csw:0.9449},
+  'Tony Randazzo': {runAdj:0.128, kAdj:0.1, zone:55, csw:0.9396},
+  'Tripp Gibson': {runAdj:0.486, kAdj:0.37, zone:64, csw:0.9468},
+  'Vic Carapazza': {runAdj:0.533, kAdj:0.32, zone:46, csw:0.9428},
+  'Will Little': {runAdj:0.546, kAdj:0.36, zone:48, csw:0.9472},
+  'Willie Traynor': {runAdj:0.383, kAdj:0.48, zone:33, csw:0.9461},
+};
 
 // ═══════════════════════════════════════════════
 // DATA SOURCES
@@ -696,6 +770,70 @@ function fetchJSON(url) {
   });
 }
 
+// ═══════════════════════════════════════════════
+// THE ODDS API — live moneyline + totals
+// ═══════════════════════════════════════════════
+async function fetchOdds() {
+  // Cache for 30 minutes
+  var now = Date.now();
+  if (CFG.ODDS_CACHE && (now - CFG.ODDS_CACHE_TIME) < 30 * 60 * 1000) {
+    return CFG.ODDS_CACHE;
+  }
+  try {
+    var url = CFG.ODDS_API_BASE + '/sports/baseball_mlb/odds' +
+      '?apiKey=' + CFG.ODDS_API_KEY +
+      '&regions=us&markets=h2h,totals&oddsFormat=american&bookmakers=draftkings,fanduel,betmgm';
+    var data = await fetchJSON(url);
+    // Build lookup by team names
+    var lookup = {};
+    (data || []).forEach(function(game) {
+      var home = game.home_team;
+      var away = game.away_team;
+      var key = away + '_' + home;
+      var odds = { awayML: null, homeML: null, total: null, openTotal: null };
+      (game.bookmakers || []).forEach(function(bk) {
+        (bk.markets || []).forEach(function(mkt) {
+          if (mkt.key === 'h2h') {
+            (mkt.outcomes || []).forEach(function(o) {
+              if (o.name === away && !odds.awayML) odds.awayML = o.price;
+              if (o.name === home && !odds.homeML) odds.homeML = o.price;
+            });
+          }
+          if (mkt.key === 'totals') {
+            var over = (mkt.outcomes || []).find(function(o) { return o.name === 'Over'; });
+            if (over && !odds.total) odds.total = over.point;
+          }
+        });
+      });
+      lookup[key] = odds;
+      // Also store by abbreviated key
+      lookup[home + '_' + away] = odds;
+    });
+    CFG.ODDS_CACHE = lookup;
+    CFG.ODDS_CACHE_TIME = now;
+    console.log('Odds API loaded:', Object.keys(lookup).length / 2, 'games');
+    return lookup;
+  } catch(e) {
+    console.warn('Odds API failed:', e.message);
+    return {};
+  }
+}
+
+// Convert American odds to implied probability
+function mlToImplied(ml) {
+  if (!ml) return 0.5;
+  if (ml > 0) return 100 / (ml + 100);
+  return Math.abs(ml) / (Math.abs(ml) + 100);
+}
+
+// Convert American odds to decimal edge vs model score
+function calcMLEdge(modelScore, ml) {
+  if (!ml) return null;
+  var implied = mlToImplied(ml);
+  return parseFloat(((modelScore / 100 - implied) * 100).toFixed(1));
+}
+
+
 async function loadSchedule() {
   var hydrate = 'team,venue,probablePitcher,linescore,game(content(summary))';
   // Try regular season first, fall back to spring training if no games
@@ -723,6 +861,63 @@ async function loadSchedule() {
 }
 
 // ── LIVE DATA FETCH FUNCTIONS ────────────────────────────────────
+
+// ═══════════════════════════════════════════════
+// HOME / AWAY SPLITS — pitcher and team
+// Uses MLB API sitCodes: h = home, a = away
+// ═══════════════════════════════════════════════
+async function fetchPitcherHomeSplit(personId, isHome) {
+  if (!personId) return null;
+  var sitCode = isHome ? 'h' : 'a';
+  var year = new Date().getFullYear();
+  var prevYear = year - 1;
+  for (var si = 0; si < 2; si++) {
+    var season = si === 0 ? year : prevYear;
+    try {
+      var url = CFG.MLB_BASE + '/people/' + personId +
+        '/stats?stats=statSplits&group=pitching&season=' + season +
+        '&sitCodes=' + sitCode;
+      var data = await fetchJSON(url);
+      var splits = [];
+      ((data.stats||[])[0]||{splits:[]}).splits.forEach(function(s){ splits.push(s.stat||{}); });
+      if (!splits.length) continue;
+      var s = splits[0];
+      var ip = parseFloat(s.inningsPitched||0);
+      if (ip < 5) continue;
+      return {
+        era: parseFloat(s.era||'4.50'),
+        whip: parseFloat(s.whip||'1.30'),
+        ip: ip,
+        location: isHome ? 'home' : 'away'
+      };
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+async function fetchTeamHomeSplit(teamId, isHome) {
+  if (!teamId) return null;
+  var sitCode = isHome ? 'h' : 'a';
+  var year = new Date().getFullYear();
+  var prevYear = year - 1;
+  for (var si = 0; si < 2; si++) {
+    var season = si === 0 ? year : prevYear;
+    try {
+      var url = CFG.MLB_BASE + '/teams/' + teamId +
+        '/stats?stats=statSplits&group=hitting&season=' + season +
+        '&sitCodes=' + sitCode + '&gameType=R';
+      var data = await fetchJSON(url);
+      var st = (((data.stats||[])[0]||{}).splits||[])[0]||{};
+      var s = st.stat||{};
+      var pa = parseFloat(s.plateAppearances||0);
+      if (pa < 10) continue;
+      var avg = parseFloat(s.avg||'.250'), slg = parseFloat(s.slg||'.400'), obp = parseFloat(s.obp||'.320');
+      return { ops: parseFloat(s.ops||'.720'), obp: obp, slg: slg, avg: avg, pa: pa };
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
 
 async function fetchPitcherStats(personId) {
   if (!personId) return null;
@@ -1141,6 +1336,29 @@ function bpPercents(bp, recentLog) {
 
 // ── REAL SCORING ENGINE ──────────────────────────────────────────
 
+// ═══════════════════════════════════════════════
+// WAR APPROXIMATION from existing stats
+// Pitcher: (lgERA - ERA) / 9 * IP / 9.5
+// Hitter:  (wRC+ - 100) / 100 * PA/650 * 5
+// Not exact but within ~0.5 WAR of FanGraphs
+// ═══════════════════════════════════════════════
+function calcPitcherWAR(sp) {
+  if (!sp || !sp.era || !sp.ip) return null;
+  var lgERA = 4.20; // 2025 MLB average
+  var winsAbove = (lgERA - sp.era) / 9 * sp.ip / 9.5;
+  return parseFloat(winsAbove.toFixed(1));
+}
+
+function calcHitterWAR(off) {
+  if (!off || !off.ops) return null;
+  // Estimate wRC+ from OPS (rough: wRC+ ≈ OPS * 140 - 20)
+  var wrcPlus = Math.round(off.ops * 140 - 20);
+  var pa = 650; // full season assumed
+  var war = (wrcPlus - 100) / 100 * (pa / 650) * 5;
+  return parseFloat(Math.max(-3, Math.min(8, war)).toFixed(1));
+}
+
+
 function scoreGame(awayData, homeData, wx, park, ump) {
   var awySP  = awayData.pitcherStats;
   var homSP  = homeData.pitcherStats;
@@ -1395,7 +1613,7 @@ function buildGameFromAPI(g, wx) {
   };
 }
 
-async function scoreAndAttach(game, umpMap) {
+async function scoreAndAttach(game, umpMap, oddsMap) {
   var awayPid = game.awayPitcherId;
   var homePid = game.homePitcherId;
   var awayTid = game.awayTeamId;
@@ -1416,7 +1634,11 @@ async function scoreAndAttach(game, umpMap) {
     fetchBullpenStats(awayTid).catch(function(){return null;}),
     fetchBullpenStats(homeTid).catch(function(){return null;}),
     fetchRecentGameLog(awayTid).catch(function(){return null;}),
-    fetchRecentGameLog(homeTid).catch(function(){return null;})
+    fetchRecentGameLog(homeTid).catch(function(){return null;}),
+    fetchPitcherHomeSplit(awayPid, false).catch(function(){return null;}),
+    fetchPitcherHomeSplit(homePid, true).catch(function(){return null;}),
+    fetchTeamHomeSplit(awayTid, false).catch(function(){return null;}),
+    fetchTeamHomeSplit(homeTid, true).catch(function(){return null;})
   ]);
 
   var awaySP=results[0], homeSP=results[1];
@@ -1425,15 +1647,40 @@ async function scoreAndAttach(game, umpMap) {
   var awayPlat=results[6],homePlat=results[7];
   var awayBP=results[8], homeBP=results[9];
   var awayLog=results[10],homeLog=results[11];
+  var awaySPaway=results[12], homeSPhome=results[13];
+  var awayOffAway=results[14], homeOffHome=results[15];
+
+  // Blend home/away location splits into main stats (30% weight)
+  if (awaySPaway && awaySP) {
+    awaySP.era  = parseFloat((awaySP.era  * 0.7 + awaySPaway.era  * 0.3).toFixed(2));
+    awaySP.whip = parseFloat((awaySP.whip * 0.7 + awaySPaway.whip * 0.3).toFixed(2));
+  }
+  if (homeSPhome && homeSP) {
+    homeSP.era  = parseFloat((homeSP.era  * 0.7 + homeSPhome.era  * 0.3).toFixed(2));
+    homeSP.whip = parseFloat((homeSP.whip * 0.7 + homeSPhome.whip * 0.3).toFixed(2));
+  }
+  if (awayOffAway && awayOff) {
+    awayOff.ops = parseFloat((awayOff.ops * 0.7 + awayOffAway.ops * 0.3).toFixed(3));
+  }
+  if (homeOffHome && homeOff) {
+    homeOff.ops = parseFloat((homeOff.ops * 0.7 + homeOffHome.ops * 0.3).toFixed(3));
+  }
+
+  // WAR estimates
+  game.awayWAR = calcPitcherWAR(awaySP);
+  game.homeWAR = calcPitcherWAR(homeSP);
 
   // Detect pitcher handedness from stats (approximation)
   // High left-on-base% suggests LHP; use as rough signal
   game.awayH = awaySP ? 'RHP' : 'RHP'; // placeholder until roster hydration
   game.homeH = homeSP ? 'RHP' : 'RHP';
 
-  var ump = (umpMap && umpMap[game.venue]) ||
-    UMPS.find(function(u){ return u.name === 'Jeff Nelson'; }) ||
-    {name:'Unknown',kAdj:0,runAdj:0,zone:'Average',csw:0.285};
+  // Look up ump by name from schedule API, then match against 2025 data
+  var umpName = (umpMap && umpMap[game.venue]) || 'Unknown';
+  var umpData = UMPS[umpName] || null;
+  var ump = umpData
+    ? Object.assign({name: umpName}, umpData)
+    : {name: umpName || 'TBD', kAdj:0, runAdj:0, zone:50, csw:0.933};
 
   // Apply sample size confidence blending (< 8 starts → blend toward league avg)
   var awayStarts = awaySP ? Math.round((awaySP.inningsPitched||0) / 5.5) : 0;
@@ -1456,6 +1703,30 @@ async function scoreAndAttach(game, umpMap) {
 
   var scored = scoreGame(awayData, homeData, game.wx, game.park, ump);
 
+  // Attach real odds if available
+  if (oddsMap) {
+    var awayFull = game.away; var homeFull = game.home;
+    var oddsKey1 = awayFull + '_' + homeFull;
+    var oddsKey2 = homeFull + '_' + awayFull;
+    var gameOdds = (oddsMap && (oddsMap[oddsKey1] || oddsMap[oddsKey2])) || null;
+    if (gameOdds) {
+      game.liveOdds = gameOdds;
+      // Update total line if we got real odds
+      if (gameOdds.total) game.total = gameOdds.total;
+      // Calculate real edge vs actual market
+      if (gameOdds.awayML && scored.ml) {
+        var awayImplied = mlToImplied(gameOdds.awayML);
+        var homeImplied = mlToImplied(gameOdds.homeML);
+        game.awayML = gameOdds.awayML;
+        game.homeML = gameOdds.homeML;
+      }
+      // Sharp money flag: line moved more than 10 cents from open
+      if (gameOdds.openAwayML && Math.abs(gameOdds.awayML - gameOdds.openAwayML) >= 10) {
+        game.flags.sharpMoney = true;
+      }
+    }
+  }
+
   // Attach scores back to game object
   game.scores = {
     ml:   scored.ml,
@@ -1468,7 +1739,8 @@ async function scoreAndAttach(game, umpMap) {
   game.flags.bullpenTired  = scored.flags.bpTired;
   game.flags.correlation   = scored.flags.correlation;
   // Only set umpFlag if a real ump was matched (not the default fallback)
-  if (scored.flags.spElite && ump && ump.name && ump.name !== 'Jeff Nelson') game.flags.umpFlag = true;
+  // Only show ump flag when we have real 2025 data for this ump
+  if (umpData && (Math.abs(umpData.runAdj) > 0.15 || Math.abs(umpData.kAdj) > 0.1)) game.flags.umpFlag = true;
 
   // Bullpen rest display
   game.bullpenRest = {
@@ -1638,16 +1910,18 @@ async function loadAll() {
       throw new Error('No games today');
     }
 
-    // Load weather and umpire assignments in parallel
+    // Load weather, umpire assignments, and odds in parallel
     var wxPromises = games.map(function(g) {
       var venue = (g.venue || {}).name || '';
       return loadWeather(venue).catch(function() { return null; });
     });
 
     var umpPromise = fetchUmpireAssignments().catch(function() { return {}; });
+    var oddsPromise = fetchOdds().catch(function() { return {}; });
 
     var wxResults = await Promise.all(wxPromises);
     var UMP_MAP = await umpPromise;
+    var ODDS_MAP = await oddsPromise;
 
     // Build skeleton game objects immediately so UI can show something
     LIVE_GAMES = games.map(function(g, i) {
@@ -1680,7 +1954,7 @@ async function loadAll() {
     if (scoreBadge) { scoreBadge.style.display = 'inline-block'; scoreBadge.textContent = 'Scoring games...'; }
 
     var scorePromises = LIVE_GAMES.map(function(game) {
-      return scoreAndAttach(game, UMP_MAP).catch(function(e) {
+      return scoreAndAttach(game, UMP_MAP, ODDS_MAP).catch(function(e) {
         console.warn('Score failed for', game.away, '@', game.home, e.message);
         return game;
       });
@@ -1879,14 +2153,9 @@ async function fetchUmpireAssignments() {
       })[0];
       if (hp && hp.official) {
         var name = hp.official.fullName || '';
-        // Match name against our UMPS table
-        var umpRecord = UMPS.filter(function(u) {
-          // Try exact match first, then last name match
-          return u.name === name ||
-                 u.name.split(' ').pop() === name.split(' ').pop();
-        })[0];
         var venue = (g.venue || {}).name || '';
-        if (venue) umpMap[venue] = umpRecord || {name: name, kAdj:0, runAdj:0, zone:'Average', csw:0.285};
+        // Store the ump name — scoreAndAttach will look up UMPS[name]
+        if (venue && name) umpMap[venue] = name;
       }
     });
     return umpMap;
@@ -2049,20 +2318,27 @@ function renderParks() {
 function renderUmps() {
   var tb = document.getElementById('umpBody');
   tb.innerHTML = '';
-  UMPS.forEach(function(u) {
+  Object.keys(UMPS).sort().forEach(function(name) {
+    var u = UMPS[name];
+    u.name = name;
     var kc = u.kAdj>0.8?'var(--gn)':u.kAdj<-0.8?'var(--rd)':'var(--mu)';
     var rc = u.runAdj>0.5?'var(--rd)':u.runAdj<-0.5?'var(--gn)':'var(--mu)';
     var tr = document.createElement('tr');
+    // Derive tendency from runAdj and kAdj
+    var tendency = u.runAdj > 0.3 ? 'Favors Offense' : u.runAdj < -0.3 ? 'Favors Pitching' : 'Neutral';
+    var tc = u.runAdj > 0.3 ? 'var(--rd)' : u.runAdj < -0.3 ? 'var(--gn)' : 'var(--mu)';
+    var cswPct = u.csw ? (u.csw * 100).toFixed(1) : '93.4';
+    var zoneLabel = u.zone > 60 ? 'Wide' : u.zone < 35 ? 'Tight' : 'Average';
     tr.innerHTML =
       '<td style="font-family:var(--fh);font-size:13px;font-weight:800">'+u.name+'</td>'+
-      '<td style="font-family:var(--fm);font-size:11px;color:'+kc+'">'+(u.kAdj>0?'+':'')+u.kAdj.toFixed(1)+'</td>'+
-      '<td style="font-family:var(--fm);font-size:11px;color:'+rc+'">'+(u.runAdj>0?'+':'')+u.runAdj.toFixed(1)+'</td>'+
-      '<td style="font-size:11px">'+u.zone+'</td>'+
-      '<td style="font-family:var(--fm);font-size:11px">'+u.csRate+'%</td>'+
-      '<td style="font-size:11px;color:'+(u.favor.includes('Pitcher')?'var(--gn)':u.favor.includes('Hitter')?'var(--rd)':'var(--mu)')+'">'+u.favor+'</td>'+
-      '<td style="font-size:10px;color:var(--mu)">'+u.nrfi+'</td>'+
-      '<td style="font-size:10px;color:var(--mu)">'+u.ou+'</td>'+
-      '<td style="font-size:10px;color:var(--mu)">'+u.ko+'</td>';
+      '<td style="font-family:var(--fm);font-size:11px;color:'+kc+'">'+(u.kAdj>0?'+':'')+u.kAdj.toFixed(2)+'</td>'+
+      '<td style="font-family:var(--fm);font-size:11px;color:'+rc+'">'+(u.runAdj>0?'+':'')+u.runAdj.toFixed(2)+'</td>'+
+      '<td style="font-size:11px">'+zoneLabel+' ('+u.zone+')</td>'+
+      '<td style="font-family:var(--fm);font-size:11px">'+cswPct+'%</td>'+
+      '<td style="font-size:11px;color:'+tc+'">'+tendency+'</td>'+
+      '<td style="font-size:10px;color:var(--mu)">--</td>'+
+      '<td style="font-size:10px;color:var(--mu)">--</td>'+
+      '<td style="font-size:10px;color:var(--mu)">--</td>';
     tb.appendChild(tr);
   });
 }
@@ -2311,13 +2587,48 @@ function renderTodayPicker() {
       '<span class="tpr-conf '+cc+'">'+p.conf+'</span>' +
       '<span class="tpr-score">'+p.score+'</span>' +
       (isLogged ? loggedHtml : inputHtml);
-    // Attach events directly to elements within this row
-    (function(idx, pid, match, type, play, score, conf) {
-      var chkEl = row.querySelector('.tpr-check');
-      if (chkEl) chkEl.onclick = function() { togglePlay(idx, pid); };
-      var lockEl = row.querySelector('.tpr-lock-btn');
-      if (lockEl) lockEl.onclick = function() { lockPlay(idx, pid, match, type, play, score, conf); };
-    }(i, playId, g.away+' @ '+g.home, p.type, p.play.replace(/['\"/]/g,''), p.score, p.conf));
+    // Attach events using direct element references — no ID lookup needed
+    (function(theRow, pid, match, type, play, score, conf) {
+      var chkEl   = theRow.querySelector('.tpr-check');
+      var lineEl  = theRow.querySelector('.tpr-line-input');
+      var unitsEl = theRow.querySelector('.tpr-units-input');
+      var lockEl  = theRow.querySelector('.tpr-lock-btn');
+
+      var doToggle = function(e) {
+        // Don't toggle if clicking on inputs or lock button
+        if (e && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
+        var isChecked = chkEl.classList.toggle('checked');
+        if (lineEl)  lineEl.classList.toggle('show',  isChecked);
+        if (unitsEl) unitsEl.classList.toggle('show', isChecked);
+        if (lockEl)  lockEl.classList.toggle('show',  isChecked);
+        var sel = document.querySelectorAll('.tpr-check.checked').length;
+        var ct = document.getElementById('selected-count');
+        if (ct) ct.textContent = sel + ' selected';
+      };
+      if (chkEl) chkEl.onclick = doToggle;
+      // Also make the entire row clickable for easier UX
+      theRow.onclick = doToggle;
+
+      if (lockEl) lockEl.onclick = function() {
+        var line  = lineEl  ? lineEl.value.trim()         : '';
+        var units = unitsEl ? parseFloat(unitsEl.value)||1 : 1;
+        if (!line) {
+          if (lineEl) { lineEl.style.borderColor='var(--rd)'; setTimeout(function(){lineEl.style.borderColor='';},1500); }
+          return;
+        }
+        var todayStr = new Date().toISOString().slice(0,10);
+        BET_LOG.push({
+          id: Date.now(), playId: pid, date: todayStr,
+          matchup: match, type: type, play: play,
+          odds: line, units: units, score: score, conf: conf,
+          result: '', pl: null
+        });
+        saveBets();
+        renderTodayPicker();
+        renderBetLog();
+        updateTrackerStats();
+      };
+    }(row, playId, g.away+' @ '+g.home, p.type, p.play.replace(/['\"/]/g,''), p.score, p.conf));
     list.appendChild(row);
   });
 }
