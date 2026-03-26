@@ -1874,7 +1874,12 @@ async function loadBvPForGames(games) {
       var top = awayBatters.slice(0, 5);
       for (var j = 0; j < top.length; j++) {
         var result = await fetchBvPSplit(homePitcherId, top[j].id);
-        if (result) bvpResults.push(result);
+        if (result) {
+          result.pitcher = game.homeP;  // home pitcher is who away batters face
+          result.pitcherTeam = game.home;
+          result.batterTeam = game.away;
+          bvpResults.push(result);
+        }
         await sleep(120);
       }
     }
@@ -1884,7 +1889,12 @@ async function loadBvPForGames(games) {
       var topHome = homeBatters.slice(0, 5);
       for (var k = 0; k < topHome.length; k++) {
         var res2 = await fetchBvPSplit(awayPitcherId, topHome[k].id);
-        if (res2) bvpResults.push(res2);
+        if (res2) {
+          res2.pitcher = game.awayP;  // away pitcher is who home batters face
+          res2.pitcherTeam = game.away;
+          res2.batterTeam = game.home;
+          bvpResults.push(res2);
+        }
         await sleep(120);
       }
     }
@@ -2395,9 +2405,9 @@ function renderBvP() {
       var kc = b.kpct>30?'var(--rd)':b.kpct<18?'var(--gn)':'var(--tx)';
       var tr = document.createElement('tr');
       tr.innerHTML =
-        '<td style="font-family:var(--fh);font-size:13px;font-weight:800">'+g.awayP+'</td>'+
+        '<td style="font-family:var(--fh);font-size:13px;font-weight:800">'+(b.pitcher||g.awayP)+'</td>'+
         '<td style="font-family:var(--fh);font-size:13px;font-weight:800">'+b.hitter+'</td>'+
-        '<td><span class="pl p-ml">'+g.home+'</span></td>'+
+        '<td><span class="pl p-ml">'+(b.batterTeam||g.home)+'</span></td>'+
         '<td style="font-family:var(--fm)">'+b.pa+'</td>'+
         '<td style="font-family:var(--fm);color:'+(b.sig==='hot'?'var(--gn)':b.sig==='cold'?'var(--rd)':'var(--tx)')+'">'+b.avg.toFixed(3)+'</td>'+
         '<td style="font-family:var(--fm)">'+b.obp.toFixed(3)+'</td>'+
