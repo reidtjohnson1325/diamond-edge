@@ -784,19 +784,34 @@ async function fetchOdds() {
       '?apiKey=' + CFG.ODDS_API_KEY +
       '&regions=us&markets=h2h,totals&oddsFormat=american&bookmakers=draftkings,fanduel,betmgm';
     var data = await fetchJSON(url);
-    // Build lookup by team names
+    // Map full team names to our 2-3 letter abbreviations
+    var TEAM_NAME_MAP = {
+      'Arizona Diamondbacks':'ARI','Atlanta Braves':'ATL','Baltimore Orioles':'BAL',
+      'Boston Red Sox':'BOS','Chicago Cubs':'CHC','Chicago White Sox':'CWS',
+      'Cincinnati Reds':'CIN','Cleveland Guardians':'CLE','Colorado Rockies':'COL',
+      'Detroit Tigers':'DET','Houston Astros':'HOU','Kansas City Royals':'KC',
+      'Los Angeles Angels':'LAA','Los Angeles Dodgers':'LAD','Miami Marlins':'MIA',
+      'Milwaukee Brewers':'MIL','Minnesota Twins':'MIN','New York Mets':'NYM',
+      'New York Yankees':'NYY','Oakland Athletics':'OAK','Philadelphia Phillies':'PHI',
+      'Pittsburgh Pirates':'PIT','San Diego Padres':'SD','San Francisco Giants':'SF',
+      'Seattle Mariners':'SEA','St. Louis Cardinals':'STL','Tampa Bay Rays':'TB',
+      'Texas Rangers':'TEX','Toronto Blue Jays':'TOR','Washington Nationals':'WSH',
+      'Athletics':'OAK','Diamondbacks':'ARI','Guardians':'CLE'
+    };
     var lookup = {};
     (data || []).forEach(function(game) {
-      var home = game.home_team;
-      var away = game.away_team;
-      var key = away + '_' + home;
-      var odds = { awayML: null, homeML: null, total: null, openTotal: null };
+      var homeFull = game.home_team;
+      var awayFull = game.away_team;
+      var homeAbbr = TEAM_NAME_MAP[homeFull] || homeFull.split(' ').pop().substring(0,3).toUpperCase();
+      var awayAbbr = TEAM_NAME_MAP[awayFull] || awayFull.split(' ').pop().substring(0,3).toUpperCase();
+      var odds = { awayML: null, homeML: null, total: null, openTotal: null,
+                   awayFull: awayFull, homeFull: homeFull };
       (game.bookmakers || []).forEach(function(bk) {
         (bk.markets || []).forEach(function(mkt) {
           if (mkt.key === 'h2h') {
             (mkt.outcomes || []).forEach(function(o) {
-              if (o.name === away && !odds.awayML) odds.awayML = o.price;
-              if (o.name === home && !odds.homeML) odds.homeML = o.price;
+              if (o.name === awayFull && !odds.awayML) odds.awayML = o.price;
+              if (o.name === homeFull && !odds.homeML) odds.homeML = o.price;
             });
           }
           if (mkt.key === 'totals') {
@@ -805,9 +820,14 @@ async function fetchOdds() {
           }
         });
       });
-      lookup[key] = odds;
-      // Also store by abbreviated key
-      lookup[home + '_' + away] = odds;
+      // Store under multiple key formats so we can match either way
+      var keys = [
+        awayFull + '_' + homeFull,
+        homeFull + '_' + awayFull,
+        awayAbbr + '_' + homeAbbr,
+        homeAbbr + '_' + awayAbbr
+      ];
+      keys.forEach(function(k) { lookup[k] = odds; });
     });
     CFG.ODDS_CACHE = lookup;
     CFG.ODDS_CACHE_TIME = now;
@@ -2527,7 +2547,7 @@ function renderCards() {
       '<div class="gc-tm">'+
         '<div class="gc-t"><div class="gc-ab">'+g.away+'</div><div class="gc-p">'+g.awayP+'</div><div class="gc-hd">'+g.awayH+'</div></div>'+
         '<div class="gc-vs"><div style="font-family:var(--fm);font-size:9px;color:var(--mu)">TOTAL</div>'+
-          '<div class="gc-tot">'+g.total+'</div>'+
+          '<div class="gc-tot" title="Click to override line" style="cursor:pointer" onclick="overrideLine(this,\''+g.id+'\')">'+(g.lineOverride||g.total)+(g.lineOverride?'*':'')+'</div>'+
           '<div style="font-family:var(--fm);font-size:9px;color:'+lmC+'">'+lmS+(g.lineMove.dir!=='FLAT'?' from '+g.lineMove.open:'')+'</div></div>'+
         '<div class="gc-t"><div class="gc-ab">'+g.home+'</div><div class="gc-p">'+g.homeP+'</div><div class="gc-hd">'+g.homeH+'</div></div>'+
       '</div>'+
@@ -3093,6 +3113,24 @@ async function runDiagnostic() {
     msg += 'Weather API: OK' + nl;
   } catch(e) { msg += 'Weather ERROR: ' + e.message + nl; }
   alert(msg);
+}
+
+
+// ═══════════════════════════════════════════════
+// MANUAL LINE OVERRIDE — click O/U total on game card
+// ═══════════════════════════════════════════════
+function overrideLine(el, gameId) {
+  var game = (USING_SAMPLE ? SAMPLE_GAMES : LIVE_GAMES).filter(function(g) { return String(g.id) === String(gameId); })[0];
+  if (!game) return;
+  var current = game.lineOverride || game.total;
+  var val = prompt('Override O/U line for ' + game.away + ' @ ' + game.home + ':', current);
+  if (val === null) return; // cancelled
+  var num = parseFloat(val);
+  if (isNaN(num) || num < 4 || num > 20) { alert('Enter a valid line (e.g. 7.5, 8, 9)'); return; }
+  game.lineOverride = num;
+  game.total = num;
+  // Re-score this game with the new line
+  scoreAndAttach(game, {}, CFG.ODDS_CACHE || {}).then(function() { renderAll(); });
 }
 
 
