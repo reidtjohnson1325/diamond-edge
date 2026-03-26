@@ -154,9 +154,9 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
 .tpr-play{font-size:11px;color:var(--tx);flex:1}
 .tpr-conf{font-family:var(--fh);font-size:10px;font-weight:800;padding:2px 6px;border-radius:3px;text-transform:uppercase}
 .tpr-score{font-family:var(--fm);font-size:10px;color:var(--mu);min-width:30px}
-.tpr-line-input{background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;width:72px;outline:none;opacity:0;pointer-events:none;transition:opacity .2s}
-.tpr-line-input.show{opacity:1;pointer-events:all}
-.tpr-line-input:focus{border-color:rgba(240,192,64,.5)}
+.tpr-line-input,.tpr-odds-input{background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;width:72px;outline:none;opacity:0;pointer-events:none;transition:opacity .2s}
+.tpr-line-input.show,.tpr-odds-input.show{opacity:1;pointer-events:all}
+.tpr-line-input:focus,.tpr-odds-input:focus{border-color:rgba(240,192,64,.5)}
 .tpr-units-input{background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;width:52px;outline:none;opacity:0;pointer-events:none;transition:opacity .2s}
 .tpr-units-input.show{opacity:1;pointer-events:all}
 .tpr-lock-btn{font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:5px;border:1px solid rgba(240,192,64,.4);background:var(--acd);color:var(--ac);cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
@@ -2584,19 +2584,17 @@ function renderTodayPicker() {
     var loggedBadge = logCount > 0
       ? '<span style="font-family:var(--fm);font-size:9px;color:var(--gn);margin-right:4px">'+logCount+' logged</span>'
       : '';
-    // Line input is context-aware by bet type
-    var linePlaceholder = {
-      'ML':       null,           // No line needed — ML just needs price already shown
-      'O/U':      'Total e.g. 7.5',
-      'NRFI':     'Price e.g. -115',
-      'KO':       'K line e.g. 8.5'
-    }[p.type] || 'Line';
-    var lineInputHtml = linePlaceholder
-      ? '<input class="tpr-line-input show" placeholder="'+linePlaceholder+'" style="width:100px" />'
-      : ''; // ML has no line input
+    // ML = just odds. O/U, NRFI, KO = line number + odds separately
+    // O/U and KO need a line number, ML and NRFI just need odds
+    var hasLine = p.type === 'O/U' || p.type === 'KO';
+    var linePH = {'O/U':'Total (7.5)','KO':'Ks (8.5)'}[p.type] || 'Line';
+    var lineInputHtml = hasLine
+      ? '<input class="tpr-line-input show" placeholder="'+linePH+'" style="width:80px" />'
+      : '';
     var inputHtml = loggedBadge +
       lineInputHtml +
-      '<input class="tpr-units-input show" placeholder="Units" value="1" />' +
+      '<input class="tpr-odds-input show" placeholder="Odds (-115)" style="width:80px" />' +
+      '<input class="tpr-units-input show" placeholder="Units" value="1" style="width:52px" />' +
       '<button class="tpr-lock-btn show">Lock it in</button>';
     row.innerHTML =
       '<div class="tpr-check" id="chk-'+i+'"></div>' +
@@ -2609,6 +2607,7 @@ function renderTodayPicker() {
 
     (function(theRow, pid, match, type, play, score, conf) {
       var lineEl  = theRow.querySelector('.tpr-line-input');
+      var oddsEl  = theRow.querySelector('.tpr-odds-input');
       var unitsEl = theRow.querySelector('.tpr-units-input');
       var lockEl  = theRow.querySelector('.tpr-lock-btn');
       var chkEl   = theRow.querySelector('.tpr-check');
@@ -2626,26 +2625,34 @@ function renderTodayPicker() {
 
       if (lockEl) lockEl.onclick = function(e) {
         e.stopPropagation(); // prevent row toggle
-        var line  = lineEl  ? lineEl.value.trim() : '';
-        var units = unitsEl ? parseFloat(unitsEl.value)||1 : 1;
-        // For ML bets, line is optional — use 'ML' as default label
-        if (!line) {
-          if (lineEl) {
-            // Has a line input but it's empty — highlight it
-            lineEl.style.borderColor = 'var(--rd)';
-            lineEl.focus();
-            setTimeout(function(){ lineEl.style.borderColor=''; }, 1500);
-            return;
+        var lineVal = lineEl  ? lineEl.value.trim()          : '';
+        var oddsVal = oddsEl  ? oddsEl.value.trim()          : '';
+        var units   = unitsEl ? parseFloat(unitsEl.value)||1 : 1;
+        // Odds required for all bet types
+        if (!oddsVal) {
+          if (oddsEl) {
+            oddsEl.style.borderColor = 'var(--rd)';
+            oddsEl.focus();
+            setTimeout(function(){ oddsEl.style.borderColor=''; }, 1500);
           }
-          // No line input (ML) — use play description as line
-          line = play;
+          return;
         }
+        // Line required for O/U, NRFI, KO
+        if (lineEl && !lineVal) {
+          lineEl.style.borderColor = 'var(--rd)';
+          lineEl.focus();
+          setTimeout(function(){ lineEl.style.borderColor=''; }, 1500);
+          return;
+        }
+        // Build display line — "7.5 @ -115" or "NYY ML @ -130"
+        var line = lineVal ? lineVal + ' @ ' + oddsVal : oddsVal;
         var todayStr = new Date().toISOString().slice(0,10);
         // Use unique ID so same play can be logged multiple times at different lines
         BET_LOG.push({
           id: Date.now(), playId: pid + '_' + Date.now(), date: todayStr,
           matchup: match, type: type, play: play,
-          odds: line, units: units, score: score, conf: conf,
+          line: lineVal || null,
+          odds: oddsVal, units: units, score: score, conf: conf,
           result: '', pl: null
         });
         saveBets();
@@ -2654,7 +2661,8 @@ function renderTodayPicker() {
         lockEl.style.background = 'var(--gnd)';
         lockEl.style.borderColor = 'var(--gn)';
         lockEl.style.color = 'var(--gn)';
-        if (lineEl) lineEl.value = '';
+        if (lineEl)  lineEl.value  = '';
+        if (oddsEl)  oddsEl.value  = '';
         if (unitsEl) unitsEl.value = '1';
         setTimeout(function() {
           lockEl.textContent = 'Lock it in';
