@@ -244,6 +244,7 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
     <div class="bdg bdg-sample" id="sampleBadge" style="display:none">Sample Data</div>
     <div class="bdg bdg-live" id="liveBadge">&#9679; Live Data</div>
     <div class="bdg bdg-err" id="errBadge">API Error</div>
+    <div id="odds-quota" style="font-family:var(--fm);font-size:10px;color:var(--mu);margin-left:6px"></div>
   </div>
 </header>
 
@@ -472,6 +473,8 @@ var CFG = {
   ODDS_API_BASE: 'https://api.the-odds-api.com/v4',
   ODDS_CACHE: null,
   ODDS_CACHE_TIME: 0,
+  ODDS_QUOTA_REMAINING: -1,
+  ODDS_QUOTA_USED: -1,
   MLB_BASE: 'https://statsapi.mlb.com/api/v1',
   WX_BASE:  'https://api.open-meteo.com/v1/forecast',
   SPORT_ID: 1
@@ -773,6 +776,21 @@ function fetchJSON(url) {
 // ═══════════════════════════════════════════════
 // THE ODDS API — live moneyline + totals
 // ═══════════════════════════════════════════════
+function updateOddsQuotaDisplay() {
+  var el = document.getElementById('odds-quota');
+  if (!el) return;
+  var remaining = CFG.ODDS_QUOTA_REMAINING;
+  var used = CFG.ODDS_QUOTA_USED;
+  if (remaining < 0) { el.textContent = 'Odds API: active'; el.style.color = 'var(--gn)'; return; }
+  var color = remaining > 100 ? 'var(--gn)' : remaining > 30 ? 'var(--am)' : 'var(--rd)';
+  el.textContent = 'Odds API: ' + remaining + ' credits left';
+  el.style.color = color;
+  if (remaining <= 50) {
+    el.title = 'Running low — resets monthly. Lines may fall back to 8.5 default when exhausted.';
+  }
+}
+
+
 async function fetchOdds() {
   // Cache for 30 minutes
   var now = Date.now();
@@ -783,7 +801,25 @@ async function fetchOdds() {
     var url = CFG.ODDS_API_BASE + '/sports/baseball_mlb/odds' +
       '?apiKey=' + CFG.ODDS_API_KEY +
       '&regions=us&markets=h2h,totals&oddsFormat=american&bookmakers=draftkings,fanduel,betmgm';
-    var data = await fetchJSON(url);
+    // Use raw fetch so we can read quota headers
+    var resp = await fetch(url);
+    if (!resp.ok) {
+      if (resp.status === 401 || resp.status === 422) {
+        CFG.ODDS_QUOTA_REMAINING = 0;
+        CFG.ODDS_QUOTA_USED = 500;
+        updateOddsQuotaDisplay();
+        console.warn('Odds API quota exhausted or key invalid');
+      }
+      return {};
+    }
+    var remaining = parseInt(resp.headers.get('x-requests-remaining') || '-1');
+    var used      = parseInt(resp.headers.get('x-requests-used')      || '-1');
+    if (remaining >= 0) {
+      CFG.ODDS_QUOTA_REMAINING = remaining;
+      CFG.ODDS_QUOTA_USED = used;
+      updateOddsQuotaDisplay();
+    }
+    var data = await resp.json();
     // Map full team names to our 2-3 letter abbreviations
     var TEAM_NAME_MAP = {
       'Arizona Diamondbacks':'ARI','Atlanta Braves':'ATL','Baltimore Orioles':'BAL',
@@ -1696,11 +1732,13 @@ async function scoreAndAttach(game, umpMap, oddsMap) {
   game.homeH = homeSP ? 'RHP' : 'RHP';
 
   // Look up ump by name from schedule API, then match against 2025 data
-  var umpName = (umpMap && umpMap[game.venue]) || 'Unknown';
-  var umpData = UMPS[umpName] || null;
+  var umpName = (umpMap && umpMap[game.venue]) || '';
+  var umpData = umpName ? (UMPS[umpName] || null) : null;
   var ump = umpData
     ? Object.assign({name: umpName}, umpData)
     : {name: umpName || 'TBD', kAdj:0, runAdj:0, zone:50, csw:0.933};
+  // Store on game object so UI can display it
+  if (umpName) game.ump = umpName;
 
   // Apply sample size confidence blending (< 8 starts → blend toward league avg)
   var awayStarts = awaySP ? Math.round((awaySP.inningsPitched||0) / 5.5) : 0;
@@ -2189,21 +2227,30 @@ async function fetchUmpireAssignments() {
     var data = await fetchJSON(url);
     var umpMap = {};
     var dates = data.dates || [];
-    (dates[0] ? dates[0].games : []).forEach(function(g) {
+    var games = dates[0] ? dates[0].games : [];
+    var assigned = 0;
+    games.forEach(function(g) {
       var officials = g.officials || [];
+      var venue = (g.venue || {}).name || '';
+      // Try multiple name formats for home plate ump
       var hp = officials.filter(function(o) {
-        return (o.officialType||'').toLowerCase().indexOf('home plate') !== -1 ||
-               (o.officialType||'').toLowerCase().indexOf('hp') !== -1;
+        var t = (o.officialType||'').toLowerCase();
+        return t.indexOf('home plate') !== -1 || t === 'hp' || t === 'home' || t === 'plate';
       })[0];
+      // Fallback: first official listed if no type match
+      if (!hp && officials.length) hp = officials[0];
       if (hp && hp.official) {
-        var name = hp.official.fullName || '';
-        var venue = (g.venue || {}).name || '';
-        // Store the ump name — scoreAndAttach will look up UMPS[name]
-        if (venue && name) umpMap[venue] = name;
+        var name = hp.official.fullName || hp.official.lastName || '';
+        if (venue && name) {
+          umpMap[venue] = name;
+          assigned++;
+        }
       }
     });
+    console.log('Umpires assigned:', assigned, '/', games.length, 'games | Map:', JSON.stringify(umpMap));
     return umpMap;
   } catch(e) {
+    console.warn('Umpire fetch failed:', e.message);
     return {};
   }
 }
