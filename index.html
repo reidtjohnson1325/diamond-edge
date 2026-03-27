@@ -1057,19 +1057,7 @@ async function fetchPitcherStats(personId) {
   };
 }
 
-async function fetchPitcherFirstInnStats(personId) {
-  if (!personId) return null;
-  var url = CFG.MLB_BASE + '/people/' + personId +
-    '/stats?stats=statSplits&group=pitching&season=' + new Date().getFullYear() + '&sitCodes=1';
-  try {
-    var data = await fetchJSON(url);
-    var st = ((((data.stats||[])[0]||{}).splits)||[])[0]||{};
-    var s  = st.stat||{};
-    var ip = parseFloat(s.inningsPitched||0)||0.1;
-    return { era:parseFloat(s.era||'9.00'), whip:parseFloat(s.whip||'2.00'),
-             kpct:parseFloat(s.strikeOuts||0)/ip/3, bbpct:parseFloat(s.baseOnBalls||0)/ip/3 };
-  } catch(e){ return null; }
-}
+// [old fetchPitcherFirstInnStats removed — updated version below]
 
 // [duplicate fetch functions removed — see scoring engine section below]
 
@@ -1099,22 +1087,44 @@ function loadWeather(venue) {
 
 // [old duplicate fetchPitcherStats removed]
 
-async function fetchPitcherFirstInnStats(personId) {
+async function fetchPitcherFirstInnStats(personId, fullSeasonStats) {
+  // fullSeasonStats passed in so we can derive smart fallback from overall ERA
   if (!personId) return null;
-  var url = CFG.MLB_BASE + '/people/' + personId +
-    '/stats?stats=statSplits&group=pitching&season=' + new Date().getFullYear() + '&sitCodes=1';
-  try {
-    var data = await fetchJSON(url);
-    var sp = ((data.stats||[])[0]||{}).splits||[];
-    var st = (sp[0]||{}).stat || {};
-    var ip = parseFloat(st.inningsPitched||0) || 0.1;
+  var year = new Date().getFullYear();
+  var seasons = [year, year - 1];
+  for (var si = 0; si < seasons.length; si++) {
+    try {
+      var url = CFG.MLB_BASE + '/people/' + personId +
+        '/stats?stats=statSplits&group=pitching&season=' + seasons[si] + '&sitCodes=1';
+      var data = await fetchJSON(url);
+      var sp = ((data.stats||[])[0]||{}).splits||[];
+      if (!sp.length) continue;
+      var st = sp[0].stat || {};
+      var ip = parseFloat(st.inningsPitched||0);
+      if (ip < 3) continue; // need at least 3 innings of first-inning data
+      var era = parseFloat(st.era||'0');
+      if (!era || era <= 0) continue;
+      return {
+        era:   era,
+        whip:  parseFloat(st.whip||'1.30'),
+        kpct:  ip > 0 ? parseFloat(st.strikeOuts||0) / (ip * 3 + parseFloat(st.baseOnBalls||0) + parseFloat(st.strikeOuts||0)) : 0.22,
+        bbpct: ip > 0 ? parseFloat(st.baseOnBalls||0) / (ip * 3 + parseFloat(st.baseOnBalls||0) + parseFloat(st.strikeOuts||0)) : 0.08
+      };
+    } catch(e) { continue; }
+  }
+  // No first-inning data — derive from overall stats
+  // First innings tend to have ~10% higher ERA than full-season (pitcher still warming up)
+  // but also fewer HR allowed. Net effect is roughly +0.3 ERA
+  if (fullSeasonStats && fullSeasonStats.era) {
+    var derivedEra = parseFloat((fullSeasonStats.era * 1.08).toFixed(2));
     return {
-      era:  parseFloat(st.era||'9.00'),
-      whip: parseFloat(st.whip||'2.00'),
-      kpct: parseFloat(st.strikeOuts||0)/ip/3,
-      bbpct:parseFloat(st.baseOnBalls||0)/ip/3
+      era:   Math.min(7.0, derivedEra),
+      whip:  fullSeasonStats.whip || 1.30,
+      kpct:  fullSeasonStats.kpct || 0.22,
+      bbpct: fullSeasonStats.bbpct || 0.08
     };
-  } catch(e) { return null; }
+  }
+  return null; // truly no data — NRFI will use overall SP percentiles as fallback
 }
 
 async function fetchTeamStats(teamId) {
@@ -1547,8 +1557,8 @@ function scoreGame(awayData, homeData, wx, park, ump) {
   var nrfiPlay  = nrfiRaw >= 0.55 ? 'NRFI' : 'YRFI';
   var nrfiEdge  = parseFloat(Math.abs(nrfiRaw - 0.50) * 20).toFixed(1);
   var nrfiFactors = [
-    {n:'Away SP 1st-inn ERA',  v:awyFI?awyFI.era.toFixed(2):(awySP?awySP.era.toFixed(2):'N/A'), pct:Math.round(awFI_era*100)},
-    {n:'Home SP 1st-inn ERA',  v:homFI?homFI.era.toFixed(2):(homSP?homSP.era.toFixed(2):'N/A'), pct:Math.round(homFI_era*100)},
+    {n:'Away SP 1st-inn ERA',  v:awyFI?awyFI.era.toFixed(2)+(awyFI._derived?' (est)':''):(awySP?'~'+parseFloat((awySP.era*1.08).toFixed(2)):' N/A'), pct:Math.round(awFI_era*100)},
+    {n:'Home SP 1st-inn ERA',  v:homFI?homFI.era.toFixed(2)+(homFI._derived?' (est)':''):(homSP?'~'+parseFloat((homSP.era*1.08).toFixed(2)):' N/A'), pct:Math.round(homFI_era*100)},
     {n:'Away SP K rate',       v:awySP?(awySP.kpct*100).toFixed(1)+'%':'N/A', pct:Math.round(awySPp.k9*100)},
     {n:'Home SP K rate',       v:homSP?(homSP.kpct*100).toFixed(1)+'%':'N/A', pct:Math.round(homSPp.k9*100)},
     {n:'Away SP BB rate (1st)',v:awyFI?(awyFI.bbpct*100).toFixed(1)+'%':(awySP?(awySP.bbpct*100).toFixed(1)+'%':'N/A'), pct:Math.round(awFI_bb*100)},
