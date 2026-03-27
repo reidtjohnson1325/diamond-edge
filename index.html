@@ -267,7 +267,8 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
   <div class="sgrid">
     <div class="sc"><div class="lb">Strong plays</div><div class="vl" id="s-strong" style="color:var(--ac)">0</div><div class="sb">High confidence today</div></div>
     <div class="sc"><div class="lb">Best edge</div><div class="vl" id="s-edge" style="color:var(--gn)">--</div><div class="sb">vs. implied odds</div></div>
-    <div class="sc"><div class="lb">Games today</div><div class="vl" id="s-games" style="color:var(--bl)">0</div><div class="sb">All matchups scored</div></div>
+    <div class="sc"><div class="lb">Baselines</div><div class="vl" style="font-size:11px;margin-top:4px" id="league-blend-status">Loading...</div></div>
+  <div class="sc"><div class="lb">Games today</div><div class="vl" id="s-games" style="color:var(--bl)">0</div><div class="sb">All matchups scored</div></div>
     <div class="sc"><div class="lb">Data last refreshed</div><div class="vl" style="font-size:13px;margin-top:4px;font-family:var(--fm)" id="s-refresh">--</div><div class="sb"><button onclick="loadAll()" style="background:none;border:none;color:var(--bl);cursor:pointer;font-family:var(--fm);font-size:10px;padding:0">Refresh now</button></div></div>
   </div>
   <div class="sec">
@@ -1371,6 +1372,163 @@ async function fetchRecentGameLog(teamId) {
 
 // ── PERCENTILE ENGINE ────────────────────────────────────────────
 // League average baselines (2024 MLB averages)
+// ═══════════════════════════════════════════════
+// LIVE LEAGUE AVERAGES — auto-fetched and blended
+// with 2025 baselines using Marcel regression
+// Regress constant: 30 team-games worth of data
+// ═══════════════════════════════════════════════
+var LEAGUE_2025 = {
+  spEra:   3.95, spXfip:  3.88, spK9:    9.1,  spBb9:   3.0,
+  spWhip:  1.25, spKpct:  0.228,spBbpct: 0.079, spKbb:   0.149,
+  spFinnEra: 3.45,
+  offOps:  0.728,offObp:  0.320, offSlg:  0.418,
+  offKpct: 0.231,offBbpct:0.084, offIso:  0.161,
+  offRpg:  4.52, bpEra:   4.05, runDiff: 0
+};
+
+async function fetchLeagueAverages() {
+  var year = new Date().getFullYear();
+  try {
+    // Fetch pitching and hitting league totals in parallel
+    var results = await Promise.all([
+      fetchJSON(CFG.MLB_BASE + '/stats?stats=season&group=pitching&season=' + year +
+        '&sportId=1&gameType=R&playerPool=qualified').catch(function(){return null;}),
+      fetchJSON(CFG.MLB_BASE + '/stats?stats=season&group=hitting&season=' + year +
+        '&sportId=1&gameType=R&playerPool=qualified').catch(function(){return null;})
+    ]);
+
+    var pitchData = results[0];
+    var hitData   = results[1];
+
+    // Parse pitching averages — aggregate across all qualified SPs
+    var spStats = null;
+    if (pitchData && (pitchData.stats||[]).length) {
+      var splits = (pitchData.stats[0].splits||[]);
+      if (splits.length) {
+        var totIP=0, totER=0, totK=0, totBB=0, totH=0, totHR=0, totGP=0;
+        splits.forEach(function(sp) {
+          var s = sp.stat||{};
+          var ip = parseFloat(s.inningsPitched||0);
+          totIP += ip;
+          totER += parseFloat(s.earnedRuns||0);
+          totK  += parseFloat(s.strikeOuts||0);
+          totBB += parseFloat(s.baseOnBalls||0);
+          totH  += parseFloat(s.hits||0);
+          totHR += parseFloat(s.homeRuns||0);
+          totGP += parseFloat(s.gamesPlayed||0);
+        });
+        if (totIP > 100) {
+          var lgEra   = (totER * 9) / totIP;
+          var lgK9    = (totK  * 9) / totIP;
+          var lgBb9   = (totBB * 9) / totIP;
+          var lgWhip  = (totH + totBB) / totIP;
+          var lgKpct  = totK  / (totIP * 3 + totBB + totK);
+          var lgBbpct = totBB / (totIP * 3 + totBB + totK);
+          var lgHrPer9= (totHR * 9) / totIP;
+          var lgXfip  = ((13 * totHR + 3 * totBB - 2 * totK) / totIP) + 3.15;
+          spStats = {
+            era: lgEra, xfip: lgXfip, k9: lgK9, bb9: lgBb9,
+            whip: lgWhip, kpct: lgKpct, bbpct: lgBbpct,
+            kbb: lgKpct - lgBbpct, gp: totGP, ip: totIP
+          };
+        }
+      }
+    }
+
+    // Parse hitting averages
+    var offStats = null;
+    if (hitData && (hitData.stats||[]).length) {
+      var splits = (hitData.stats[0].splits||[]);
+      if (splits.length) {
+        var totPA=0, totAB=0, totH=0, totHR=0, totK=0, totBB=0, totRuns=0, totGP=0;
+        var totOBP=0, totSLG=0, totOPS=0, totCnt=0;
+        splits.forEach(function(sp) {
+          var s = sp.stat||{};
+          var pa = parseFloat(s.plateAppearances||0);
+          totPA   += pa;
+          totAB   += parseFloat(s.atBats||0);
+          totH    += parseFloat(s.hits||0);
+          totHR   += parseFloat(s.homeRuns||0);
+          totK    += parseFloat(s.strikeOuts||0);
+          totBB   += parseFloat(s.baseOnBalls||0);
+          totRuns += parseFloat(s.runs||0);
+          totGP   += parseFloat(s.gamesPlayed||0);
+          if (pa > 0) { totOBP += parseFloat(s.obp||0); totSLG += parseFloat(s.slg||0); totOPS += parseFloat(s.ops||0); totCnt++; }
+        });
+        if (totPA > 1000 && totCnt > 0) {
+          var lgOBP = totBB > 0 ? (totH + totBB) / Math.max(1, totAB + totBB) : totOBP / totCnt;
+          var lgSLG = totAB > 0 ? (totH + totHR) / Math.max(1, totAB) : totSLG / totCnt; // rough
+          // Use averaged OPS since SLG formula is complex
+          var lgOPS = totCnt > 0 ? totOPS / totCnt : LEAGUE_2025.offOps;
+          lgOBP = totCnt > 0 ? totOBP / totCnt : LEAGUE_2025.offObp;
+          lgSLG = totCnt > 0 ? totSLG / totCnt : LEAGUE_2025.offSlg;
+          offStats = {
+            ops: lgOPS, obp: lgOBP, slg: lgSLG,
+            kpct: totK / Math.max(1, totPA),
+            bbpct: totBB / Math.max(1, totPA),
+            iso: Math.max(0, lgSLG - (totAB > 0 ? totH/totAB : 0.250)),
+            rpg: totGP > 0 ? totRuns / totGP : LEAGUE_2025.offRpg,
+            pa: totPA, gp: totGP
+          };
+        }
+      }
+    }
+
+    if (!spStats && !offStats) {
+      console.log('League averages: no 2026 data yet — using 2025 baselines');
+      return;
+    }
+
+    // Marcel blend: weight 2026 by games played, regress to 2025
+    // Use team-games equivalent: pitching IP / 9 ≈ team games
+    var REGRESS = 30; // games worth of prior season data
+    var curGP = spStats ? spStats.ip / 9 : (offStats ? offStats.gp / 30 : 0);
+    var curW  = Math.max(0, curGP);
+    var prevW = REGRESS;
+    var total = curW + prevW;
+    var blend = function(cur, prev) {
+      return parseFloat(((cur * curW + prev * prevW) / total).toFixed(4));
+    };
+
+    if (spStats) {
+      LEAGUE.spEra    = blend(spStats.era,   LEAGUE_2025.spEra);
+      LEAGUE.spXfip   = blend(spStats.xfip,  LEAGUE_2025.spXfip);
+      LEAGUE.spK9     = blend(spStats.k9,    LEAGUE_2025.spK9);
+      LEAGUE.spBb9    = blend(spStats.bb9,   LEAGUE_2025.spBb9);
+      LEAGUE.spWhip   = blend(spStats.whip,  LEAGUE_2025.spWhip);
+      LEAGUE.spKpct   = blend(spStats.kpct,  LEAGUE_2025.spKpct);
+      LEAGUE.spBbpct  = blend(spStats.bbpct, LEAGUE_2025.spBbpct);
+      LEAGUE.spKbb    = blend(spStats.kbb,   LEAGUE_2025.spKbb);
+      LEAGUE.bpEra    = blend(spStats.era * 1.22, LEAGUE_2025.bpEra);
+    }
+    if (offStats) {
+      LEAGUE.offOps   = blend(offStats.ops,   LEAGUE_2025.offOps);
+      LEAGUE.offObp   = blend(offStats.obp,   LEAGUE_2025.offObp);
+      LEAGUE.offSlg   = blend(offStats.slg,   LEAGUE_2025.offSlg);
+      LEAGUE.offKpct  = blend(offStats.kpct,  LEAGUE_2025.offKpct);
+      LEAGUE.offBbpct = blend(offStats.bbpct, LEAGUE_2025.offBbpct);
+      LEAGUE.offIso   = blend(offStats.iso,   LEAGUE_2025.offIso);
+      LEAGUE.offRpg   = blend(offStats.rpg,   LEAGUE_2025.offRpg);
+    }
+
+    var pct2026 = Math.round(curW / total * 100);
+    console.log('League averages updated: ' + pct2026 + '% 2026 / ' + (100-pct2026) + '% 2025 | SP ERA: ' + LEAGUE.spEra.toFixed(2) + ' | Off OPS: ' + LEAGUE.offOps.toFixed(3));
+    updateLeagueDisplay(pct2026, curGP);
+
+  } catch(e) {
+    console.warn('League averages fetch failed:', e.message);
+  }
+}
+
+function updateLeagueDisplay(pct2026, gp) {
+  var el = document.getElementById('league-blend-status');
+  if (!el) return;
+  var color = pct2026 < 10 ? 'var(--mu)' : pct2026 < 40 ? 'var(--am)' : 'var(--gn)';
+  el.textContent = 'Baselines: ' + pct2026 + '% live 2026 / ' + (100-pct2026) + '% 2025 (' + Math.round(gp) + ' team-games)';
+  el.style.color = color;
+}
+
+
 var LEAGUE = {
   // 2025 MLB season actuals
   spEra:   3.95, spXfip:  3.88, spK9:    9.1,  spBb9:   3.0,
@@ -2148,6 +2306,8 @@ async function loadAll() {
 
     var umpPromise = fetchUmpireAssignments().catch(function() { return {}; });
     var oddsPromise = fetchOdds().catch(function() { return {}; });
+    // Fetch live league averages and update LEAGUE baselines before scoring
+    await fetchLeagueAverages().catch(function(e) { console.warn('League avg failed:', e.message); });
 
     var wxResults = await Promise.all(wxPromises);
     var UMP_MAP = await umpPromise;
