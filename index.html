@@ -431,6 +431,10 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
       <span style="font-family:var(--fm);font-size:10px;color:var(--mu)" id="selected-count">0 selected</span>
     </div>
     <div id="todayPlaysList"></div>
+  <div style="margin-top:20px;padding:14px 16px;background:var(--sf2);border-radius:var(--r);border:1px solid var(--bd)">
+    <div style="font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin-bottom:8px">Model Recalibration — win rate by bet type</div>
+    <div id="recal-status"><div style="font-size:11px;color:var(--mu)">Log 5+ results per type to activate</div></div>
+  </div>
   </div>
 
   <!-- BET LOG -->
@@ -1539,7 +1543,7 @@ function scoreGame(awayData, homeData, wx, park, ump) {
     + umpKAdj * 0.05;
   nrfiRaw = Math.max(0.22, Math.min(0.88, nrfiRaw));
   var nrfiScore = Math.round(nrfiRaw * 100);
-  nrfiScore = Math.min(92, Math.max(25, nrfiScore));
+  nrfiScore = Math.min(84, Math.max(25, nrfiScore)); // NRFI capped at 84 — high variance bet
   var nrfiPlay  = nrfiRaw >= 0.55 ? 'NRFI' : 'YRFI';
   var nrfiEdge  = parseFloat(Math.abs(nrfiRaw - 0.50) * 20).toFixed(1);
   var nrfiFactors = [
@@ -1585,7 +1589,10 @@ function scoreGame(awayData, homeData, wx, park, ump) {
   ];
 
   // ── CONFIDENCE + CORRELATION FLAGS ──────────────────────────────
-  function conf(s) { return s>=78?'STRONG':s>=62?'LEAN':'SKIP'; }
+  // Global confidence thresholds — raised to 82 to reduce false STRONG signals
+  function conf(s) { return s>=82?'STRONG':s>=62?'LEAN':'SKIP'; }
+  // NRFI has higher threshold — too volatile for standard STRONG
+  function confNrfi(s) { return s>=86?'STRONG':s>=65?'LEAN':'SKIP'; }
   function edgeVal(s) { return parseFloat((s/100*14-4).toFixed(1)); }
 
   // Correlation: elite SP → surface correlated under + favored ML
@@ -1595,10 +1602,17 @@ function scoreGame(awayData, homeData, wx, park, ump) {
   // Bullpen tired flag
   var bpTired = Math.max(awyBPp.fatigue, homBPp.fatigue) > 0.55;
 
+  // Apply result-based recalibration if enough historical data exists
+  // Pulls score toward 50 in buckets where model has been overconfident
+  mlScore   = Math.round(50 + (mlScore   - 50) * getRecalMultiplier('ml',   mlScore));
+  ouScore   = Math.round(50 + (ouScore   - 50) * getRecalMultiplier('ou',   ouScore));
+  nrfiScore = Math.round(50 + (nrfiScore - 50) * getRecalMultiplier('nrfi', nrfiScore));
+  koScore   = Math.round(50 + (koScore   - 50) * getRecalMultiplier('ko',   koScore));
+
   return {
     ml:   {score:mlScore,   play:mlPlay,   edge:parseFloat(mlEdge),  conf:conf(mlScore),  factors:mlFactors},
     ou:   {score:ouScore,   play:ouPlay,   edge:parseFloat(ouEdge),  conf:conf(ouScore),  factors:ouFactors},
-    nrfi: {score:nrfiScore, play:nrfiPlay, edge:parseFloat(nrfiEdge),conf:conf(nrfiScore),factors:nrfiFactors},
+    nrfi: {score:nrfiScore, play:nrfiPlay, edge:parseFloat(nrfiEdge),conf:confNrfi(nrfiScore),factors:nrfiFactors},
     ko:   {score:koScore,   play:koPlay,   edge:parseFloat(koEdge),  conf:conf(koScore),  factors:koFactors},
     flags: {
       spElite: spElite,
@@ -2612,6 +2626,80 @@ function renderCards() {
 // ═══════════════════════════════════════════════
 // TRACKER DATA — localStorage
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+// RESULT-BASED RECALIBRATION
+// Tracks win rates by bet type and score bucket
+// Applies multipliers after 30+ results per type
+// ═══════════════════════════════════════════════
+var RECAL_KEY = 'diamond_recal';
+var RECAL = { ml:{}, ou:{}, nrfi:{}, ko:{} };
+
+function loadRecal() {
+  try {
+    var raw = localStorage.getItem(RECAL_KEY);
+    if (raw) RECAL = JSON.parse(raw);
+  } catch(e) { RECAL = { ml:{}, ou:{}, nrfi:{}, ko:{} }; }
+}
+
+function saveRecal() {
+  try { localStorage.setItem(RECAL_KEY, JSON.stringify(RECAL)); } catch(e) {}
+}
+
+// Score bucket: 62-69, 70-77, 78-84, 85+
+function scoreBucket(score) {
+  if (score >= 85) return 'h';
+  if (score >= 78) return 'mh';
+  if (score >= 70) return 'ml';
+  return 'l';
+}
+
+// Called every time a result is marked — updates recalibration data
+function updateRecal(bet) {
+  if (!bet.result || bet.result === 'push') return;
+  var tkey = {ML:'ml','O/U':'ou',NRFI:'nrfi',KO:'ko'}[bet.type];
+  if (!tkey) return;
+  if (!RECAL[tkey]) RECAL[tkey] = {};
+  var bucket = scoreBucket(bet.score);
+  if (!RECAL[tkey][bucket]) RECAL[tkey][bucket] = {w:0, l:0};
+  if (bet.result === 'win') RECAL[tkey][bucket].w++;
+  else RECAL[tkey][bucket].l++;
+  saveRecal();
+}
+
+// Get recalibration multiplier for a given type and score
+// Returns 0.85-1.15 range — pulls overconfident scores toward 50
+function getRecalMultiplier(tkey, score) {
+  if (!RECAL[tkey]) return 1.0;
+  var bucket = scoreBucket(score);
+  var b = RECAL[tkey][bucket];
+  if (!b) return 1.0;
+  var total = b.w + b.l;
+  if (total < 15) return 1.0; // not enough data yet
+  var actualWinPct = b.w / total;
+  // Expected win pct at this score bucket
+  var expectedWinPct = bucket === 'h' ? 0.65 : bucket === 'mh' ? 0.58 : bucket === 'ml' ? 0.54 : 0.50;
+  // If actual < expected, model is overconfident — deflate
+  // If actual > expected, model is underconfident — inflate slightly
+  var ratio = actualWinPct / expectedWinPct;
+  return Math.max(0.82, Math.min(1.15, ratio));
+}
+
+// Get recalibration status for display in tracker
+function getRecalStatus() {
+  var out = {};
+  ['ml','ou','nrfi','ko'].forEach(function(t) {
+    var total = 0;
+    var wins = 0;
+    Object.keys(RECAL[t]||{}).forEach(function(b) {
+      total += RECAL[t][b].w + RECAL[t][b].l;
+      wins  += RECAL[t][b].w;
+    });
+    out[t] = { total: total, winPct: total >= 5 ? Math.round(wins/total*100) : null };
+  });
+  return out;
+}
+
+
 var BET_LOG = [];
 
 function saveBets() {
@@ -2619,6 +2707,7 @@ function saveBets() {
 }
 
 function loadBets() {
+  loadRecal();
   try {
     var raw = localStorage.getItem('diamond_bets');
     if (raw) BET_LOG = JSON.parse(raw);
@@ -2915,6 +3004,7 @@ function setResult(id, result) {
   bet.result = result;
   bet.pl = calcPL(bet.odds, bet.units, result);
   saveBets();
+  updateRecal(bet); // feed result into recalibration system
   renderBetLog();
   updateTrackerStats();
 }
@@ -2930,6 +3020,21 @@ function deleteBet(id) {
 // ═══════════════════════════════════════════════
 // TRACKER STATS
 // ═══════════════════════════════════════════════
+function renderRecalStatus() {
+  var el = document.getElementById('recal-status');
+  if (!el) return;
+  var s = getRecalStatus();
+  var types = [{k:'ml',l:'ML'},{k:'ou',l:'O/U'},{k:'nrfi',l:'NRFI'},{k:'ko',l:'KO'}];
+  el.innerHTML = types.map(function(t) {
+    var d = s[t.k];
+    var txt = d.total < 5 ? d.total+'/30 needed'
+      : d.total < 30 ? d.total+'/30 ('+d.winPct+'% W)'
+      : '<span style="color:var(--gn)">Active</span> '+d.winPct+'% W ('+d.total+' bets)';
+    return '<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--bd)">'
+      + '<span style="color:var(--mu)">'+t.l+'</span><span>'+txt+'</span></div>';
+  }).join('');
+}
+
 function updateTrackerStats() {
   var settled = BET_LOG.filter(function(b) { return b.result; });
   var wins = settled.filter(function(b) { return b.result === 'W'; }).length;
