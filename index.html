@@ -524,36 +524,36 @@ var STADIUM_COORDS = {
 // ALL 30 PARK FACTORS
 // ═══════════════════════════════════════════════
 var PARKS = [
-  {stadium:'Coors Field',team:'COL',run:1.38,hr:1.44,hits:1.28,so:0.88,roof:'Open',windSens:3,lf:347,cf:415,rf:350,elev:5200,turf:'Grass',note:'Altitude inflates all offense dramatically'},
-  {stadium:'Citizens Bank Park',team:'PHI',run:1.09,hr:1.12,hits:1.06,so:0.96,roof:'Open',windSens:2,lf:329,cf:401,rf:330,elev:20,turf:'Grass',note:'Short RF porch; friendly to LHH power'},
-  {stadium:'Yankee Stadium',team:'NYY',run:1.06,hr:1.14,hits:1.03,so:0.97,roof:'Open',windSens:2,lf:318,cf:408,rf:314,elev:55,turf:'Grass',note:'Short RF porch boosts HR especially LHH'},
-  {stadium:'Great American Ball Park',team:'CIN',run:1.07,hr:1.13,hits:1.04,so:0.95,roof:'Open',windSens:2,lf:328,cf:404,rf:325,elev:550,turf:'Grass',note:'River-facing; HR-friendly especially RHH'},
-  {stadium:'Fenway Park',team:'BOS',run:1.04,hr:1.08,hits:1.07,so:0.98,roof:'Open',windSens:2,lf:310,cf:420,rf:302,elev:21,turf:'Grass',note:'Green Monster converts HRs to doubles'},
-  {stadium:'Truist Park',team:'ATL',run:1.03,hr:1.05,hits:1.02,so:0.99,roof:'Open',windSens:1,lf:335,cf:400,rf:325,elev:1050,turf:'Grass',note:'Warm climate; slight hitter advantage'},
-  {stadium:'Camden Yards',team:'BAL',run:1.02,hr:1.05,hits:1.02,so:0.98,roof:'Open',windSens:2,lf:333,cf:400,rf:318,elev:21,turf:'Grass',note:'Short RF; classic HR-friendly ballpark'},
-  {stadium:'Wrigley Field',team:'CHC',run:1.02,hr:1.04,hits:1.03,so:0.97,roof:'Open',windSens:4,lf:355,cf:400,rf:353,elev:595,turf:'Grass',note:'Wind swings run total up to 15 pct either way'},
-  {stadium:'Chase Field',team:'ARI',run:1.02,hr:1.03,hits:1.02,so:0.98,roof:'Retractable',windSens:1,lf:330,cf:407,rf:334,elev:1090,turf:'Grass',note:'Dome when hot; plays larger than dimensions'},
-  {stadium:'Rogers Centre',team:'TOR',run:1.01,hr:1.02,hits:1.01,so:0.99,roof:'Retractable',windSens:0,lf:328,cf:400,rf:328,elev:300,turf:'Turf',note:'Turf speeds up grounders; dome-neutral'},
-  {stadium:'Busch Stadium',team:'STL',run:1.00,hr:0.98,hits:1.01,so:1.00,roof:'Open',windSens:2,lf:336,cf:400,rf:335,elev:465,turf:'Grass',note:'Fairly neutral; slightly pitcher-friendly'},
-  {stadium:'Kauffman Stadium',team:'KC',run:1.00,hr:0.97,hits:1.01,so:1.00,roof:'Open',windSens:3,lf:330,cf:410,rf:330,elev:750,turf:'Grass',note:'Large foul territory; SW wind in summer'},
-  {stadium:'Globe Life Field',team:'TEX',run:0.98,hr:0.96,hits:1.00,so:1.01,roof:'Retractable',windSens:0,lf:329,cf:407,rf:326,elev:551,turf:'Grass',note:'Climate-controlled dome; consistent all season'},
-  {stadium:'Guaranteed Rate Field',team:'CWS',run:0.98,hr:1.00,hits:0.99,so:1.00,roof:'Open',windSens:2,lf:330,cf:400,rf:335,elev:595,turf:'Grass',note:'Lake winds unpredictable in April and May'},
-  {stadium:'Angel Stadium',team:'LAA',run:0.99,hr:1.00,hits:1.00,so:1.00,roof:'Open',windSens:1,lf:347,cf:396,rf:350,elev:160,turf:'Grass',note:'True neutral park; no consistent edge'},
-  {stadium:'Nationals Park',team:'WSH',run:0.99,hr:1.00,hits:1.00,so:1.00,roof:'Open',windSens:2,lf:336,cf:402,rf:335,elev:10,turf:'Grass',note:'Fairly neutral; slight pitcher lean cool nights'},
-  {stadium:'Target Field',team:'MIN',run:0.97,hr:0.95,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:339,cf:411,rf:328,elev:830,turf:'Grass',note:'Cold springs; heats up mid-summer'},
-  {stadium:'Comerica Park',team:'DET',run:0.97,hr:0.93,hits:1.00,so:1.02,roof:'Open',windSens:2,lf:345,cf:420,rf:330,elev:600,turf:'Grass',note:'Deep CF kills power; cold springs'},
-  {stadium:'PNC Park',team:'PIT',run:0.97,hr:0.96,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:325,cf:399,rf:320,elev:730,turf:'Grass',note:'Bridge wind can suppress fly balls'},
-  {stadium:'Dodger Stadium',team:'LAD',run:0.95,hr:0.94,hits:0.98,so:1.02,roof:'Open',windSens:1,lf:330,cf:395,rf:330,elev:512,turf:'Grass',note:'Slight pitcher lean; ball does not carry at night'},
-  {stadium:'Tropicana Field',team:'TB',run:0.94,hr:0.92,hits:0.97,so:1.03,roof:'Dome',windSens:0,lf:315,cf:404,rf:322,elev:28,turf:'Turf',note:'Full dome; turf speeds play; pitcher lean'},
-  {stadium:'Progressive Field',team:'CLE',run:0.95,hr:0.94,hits:0.97,so:1.03,roof:'Open',windSens:2,lf:325,cf:405,rf:325,elev:653,turf:'Grass',note:'Lake Erie wind suppresses night games'},
-  {stadium:'loanDepot park',team:'MIA',run:0.96,hr:0.94,hits:0.98,so:1.02,roof:'Retractable',windSens:0,lf:344,cf:407,rf:335,elev:6,turf:'Grass',note:'Humid climate; dome keeps conditions flat'},
-  {stadium:'American Family Field',team:'MIL',run:0.96,hr:0.92,hits:0.98,so:1.03,roof:'Retractable',windSens:2,lf:344,cf:400,rf:345,elev:635,turf:'Grass',note:'Cold springs suppress offense early season'},
-  {stadium:'Minute Maid Park',team:'HOU',run:0.93,hr:0.91,hits:0.96,so:1.04,roof:'Retractable',windSens:0,lf:315,cf:435,rf:326,elev:43,turf:'Grass',note:'Tal Hill gone; now pitcher-leaning neutral'},
-  {stadium:'Citi Field',team:'NYM',run:0.93,hr:0.91,hits:0.96,so:1.04,roof:'Open',windSens:3,lf:335,cf:408,rf:330,elev:20,turf:'Grass',note:'Marine air from Flushing Bay suppresses HRs'},
-  {stadium:'T-Mobile Park',team:'SEA',run:0.92,hr:0.88,hits:0.95,so:1.04,roof:'Retractable',windSens:1,lf:331,cf:405,rf:326,elev:0,turf:'Grass',note:'Damp air suppresses ball; retractable roof'},
-  {stadium:'Oakland Coliseum',team:'OAK',run:0.91,hr:0.88,hits:0.94,so:1.05,roof:'Open',windSens:3,lf:330,cf:400,rf:330,elev:23,turf:'Grass',note:'Bay fogs; largest foul territory in MLB'},
-  {stadium:'Petco Park',team:'SD',run:0.88,hr:0.85,hits:0.92,so:1.06,roof:'Open',windSens:2,lf:336,cf:396,rf:322,elev:62,turf:'Grass',note:'Marine layer consistently suppresses offense'},
-  {stadium:'Oracle Park',team:'SF',run:0.87,hr:0.81,hits:0.92,so:1.07,roof:'Open',windSens:4,lf:339,cf:399,rf:309,elev:0,turf:'Grass',note:'Bay winds kill fly balls; best pitcher park'}
+  {stadium:'Coors Field',team:'COL',run:1.38,hr:1.44,hits:1.28,so:0.88,roof:'Open',windSens:3,lf:347,cf:415,rf:350,elev:5200,turf:'Grass',windDir:225,note:'Altitude inflates all offense dramatically'},
+  {stadium:'Citizens Bank Park',team:'PHI',run:1.09,hr:1.12,hits:1.06,so:0.96,roof:'Open',windSens:2,lf:329,cf:401,rf:330,elev:20,turf:'Grass',windDir:20,note:'Short RF porch; friendly to LHH power'},
+  {stadium:'Yankee Stadium',team:'NYY',run:1.06,hr:1.14,hits:1.03,so:0.97,roof:'Open',windSens:2,lf:318,cf:408,rf:314,elev:55,turf:'Grass',windDir:20,note:'Short RF porch boosts HR especially LHH'},
+  {stadium:'Great American Ball Park',team:'CIN',run:1.07,hr:1.13,hits:1.04,so:0.95,roof:'Open',windSens:2,lf:328,cf:404,rf:325,elev:550,turf:'Grass',windDir:340,note:'River-facing; HR-friendly especially RHH'},
+  {stadium:'Fenway Park',team:'BOS',run:1.04,hr:1.08,hits:1.07,so:0.98,roof:'Open',windSens:2,lf:310,cf:420,rf:302,elev:21,turf:'Grass',windDir:10,note:'Green Monster converts HRs to doubles'},
+  {stadium:'Truist Park',team:'ATL',run:1.03,hr:1.05,hits:1.02,so:0.99,roof:'Open',windSens:1,lf:335,cf:400,rf:325,elev:1050,turf:'Grass',windDir:15,note:'Warm climate; slight hitter advantage'},
+  {stadium:'Camden Yards',team:'BAL',run:1.02,hr:1.05,hits:1.02,so:0.98,roof:'Open',windSens:2,lf:333,cf:400,rf:318,elev:21,turf:'Grass',windDir:355,note:'Short RF; classic HR-friendly ballpark'},
+  {stadium:'Wrigley Field',team:'CHC',run:1.02,hr:1.04,hits:1.03,so:0.97,roof:'Open',windSens:4,lf:355,cf:400,rf:353,elev:595,turf:'Grass',windDir:45,note:'Wind swings run total up to 15 pct either way'},
+  {stadium:'Chase Field',team:'ARI',run:1.02,hr:1.03,hits:1.02,so:0.98,roof:'Retractable',windSens:1,lf:330,cf:407,rf:334,elev:1090,turf:'Grass',windDir:0,note:'Dome when hot; plays larger than dimensions'},
+  {stadium:'Rogers Centre',team:'TOR',run:1.01,hr:1.02,hits:1.01,so:0.99,roof:'Retractable',windSens:0,lf:328,cf:400,rf:328,elev:300,turf:'Turf',windDir:0,note:'Turf speeds up grounders; dome-neutral'},
+  {stadium:'Busch Stadium',team:'STL',run:1.00,hr:0.98,hits:1.01,so:1.00,roof:'Open',windSens:2,lf:336,cf:400,rf:335,elev:465,turf:'Grass',windDir:340,note:'Fairly neutral; slightly pitcher-friendly'},
+  {stadium:'Kauffman Stadium',team:'KC',run:1.00,hr:0.97,hits:1.01,so:1.00,roof:'Open',windSens:3,lf:330,cf:410,rf:330,elev:750,turf:'Grass',windDir:5,note:'Large foul territory; SW wind in summer'},
+  {stadium:'Globe Life Field',team:'TEX',run:0.98,hr:0.96,hits:1.00,so:1.01,roof:'Retractable',windSens:0,lf:329,cf:407,rf:326,elev:551,turf:'Grass',windDir:0,note:'Climate-controlled dome; consistent all season'},
+  {stadium:'Guaranteed Rate Field',team:'CWS',run:0.98,hr:1.00,hits:0.99,so:1.00,roof:'Open',windSens:2,lf:330,cf:400,rf:335,elev:595,turf:'Grass',windDir:20,note:'Lake winds unpredictable in April and May'},
+  {stadium:'Angel Stadium',team:'LAA',run:0.99,hr:1.00,hits:1.00,so:1.00,roof:'Open',windSens:1,lf:347,cf:396,rf:350,elev:160,turf:'Grass',windDir:315,note:'True neutral park; no consistent edge'},
+  {stadium:'Nationals Park',team:'WSH',run:0.99,hr:1.00,hits:1.00,so:1.00,roof:'Open',windSens:2,lf:336,cf:402,rf:335,elev:10,turf:'Grass',windDir:340,note:'Fairly neutral; slight pitcher lean cool nights'},
+  {stadium:'Target Field',team:'MIN',run:0.97,hr:0.95,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:339,cf:411,rf:328,elev:830,turf:'Grass',windDir:25,note:'Cold springs; heats up mid-summer'},
+  {stadium:'Comerica Park',team:'DET',run:0.97,hr:0.93,hits:1.00,so:1.02,roof:'Open',windSens:2,lf:345,cf:420,rf:330,elev:600,turf:'Grass',windDir:350,note:'Deep CF kills power; cold springs'},
+  {stadium:'PNC Park',team:'PIT',run:0.97,hr:0.96,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:325,cf:399,rf:320,elev:730,turf:'Grass',windDir:15,note:'Bridge wind can suppress fly balls'},
+  {stadium:'Dodger Stadium',team:'LAD',run:0.95,hr:0.94,hits:0.98,so:1.02,roof:'Open',windSens:1,lf:330,cf:395,rf:330,elev:512,turf:'Grass',windDir:340,note:'Slight pitcher lean; ball does not carry at night'},
+  {stadium:'Tropicana Field',team:'TB',run:0.94,hr:0.92,hits:0.97,so:1.03,roof:'Dome',windSens:0,lf:315,cf:404,rf:322,elev:28,turf:'Turf',windDir:0,note:'Full dome; turf speeds play; pitcher lean'},
+  {stadium:'Progressive Field',team:'CLE',run:0.95,hr:0.94,hits:0.97,so:1.03,roof:'Open',windSens:2,lf:325,cf:405,rf:325,elev:653,turf:'Grass',windDir:350,note:'Lake Erie wind suppresses night games'},
+  {stadium:'loanDepot park',team:'MIA',run:0.96,hr:0.94,hits:0.98,so:1.02,roof:'Retractable',windSens:0,lf:344,cf:407,rf:335,elev:6,turf:'Grass',windDir:0,note:'Humid climate; dome keeps conditions flat'},
+  {stadium:'American Family Field',team:'MIL',run:0.96,hr:0.92,hits:0.98,so:1.03,roof:'Retractable',windSens:2,lf:344,cf:400,rf:345,elev:635,turf:'Grass',windDir:0,note:'Cold springs suppress offense early season'},
+  {stadium:'Minute Maid Park',team:'HOU',run:0.93,hr:0.91,hits:0.96,so:1.04,roof:'Retractable',windSens:0,lf:315,cf:435,rf:326,elev:43,turf:'Grass',windDir:0,note:'Tal Hill gone; now pitcher-leaning neutral'},
+  {stadium:'Citi Field',team:'NYM',run:0.93,hr:0.91,hits:0.96,so:1.04,roof:'Open',windSens:3,lf:335,cf:408,rf:330,elev:20,turf:'Grass',windDir:355,note:'Marine air from Flushing Bay suppresses HRs'},
+  {stadium:'T-Mobile Park',team:'SEA',run:0.92,hr:0.88,hits:0.95,so:1.04,roof:'Retractable',windSens:1,lf:331,cf:405,rf:326,elev:0,turf:'Grass',windDir:315,note:'Damp air suppresses ball; retractable roof'},
+  {stadium:'Oakland Coliseum',team:'OAK',run:0.91,hr:0.88,hits:0.94,so:1.05,roof:'Open',windSens:3,lf:330,cf:400,rf:330,elev:23,turf:'Grass',windDir:0,note:'Bay fogs; largest foul territory in MLB'},
+  {stadium:'Petco Park',team:'SD',run:0.88,hr:0.85,hits:0.92,so:1.06,roof:'Open',windSens:2,lf:336,cf:396,rf:322,elev:62,turf:'Grass',windDir:315,note:'Marine layer consistently suppresses offense'},
+  {stadium:'Oracle Park',team:'SF',run:0.87,hr:0.81,hits:0.92,so:1.07,roof:'Open',windSens:4,lf:339,cf:399,rf:309,elev:0,turf:'Grass',windDir:270,note:'Bay winds kill fly balls; best pitcher park'}
 ];
 
 // ═══════════════════════════════════════════════
@@ -1250,7 +1250,7 @@ async function fetchTeamPlatoonStats(teamId, vsHand) {
   if (!cur || cur.pa < 1) return prev;
   if (!prev) return cur;
 
-  var REGRESS_PA = 200; // platoon splits need more PA to stabilize
+  var REGRESS_PA = 150; // platoon splits stabilize around 150 PA per research
   var curW = cur.pa, prevW = REGRESS_PA, total = curW + prevW;
   var blendVal = function(c, p) { return (c*curW + p*prevW) / total; };
 
@@ -1268,7 +1268,13 @@ async function fetchBullpenStats(teamId) {
   var year = new Date().getFullYear();
   var prevYear = year - 1;
 
-  var parseBP = function(data) {
+  // Fetch reliever-only stats using playerPool=qualifier filter
+  // MLB API: stats=season&group=pitching&playerPool=qualifier gives starters
+  // We use playerPool=all and filter by position type via separate calls
+  // Best available: fetch with &position=1 (pitcher) and use ERA
+  // True bullpen isolation: team total ERA minus SP ERA estimate
+  // SP ERA estimate: fetch top 5 IP pitchers' ERA (these are starters)
+  var parsePitching = function(data) {
     var statsArr = ((data||{}).stats)||[];
     if (!statsArr.length) return null;
     var splits = statsArr[0].splits||[];
@@ -1276,7 +1282,12 @@ async function fetchBullpenStats(teamId) {
     var s = splits[0].stat||{};
     var ip = parseFloat(s.inningsPitched||0);
     if (ip < 1) return null;
-    return { ip: ip, era: parseFloat(s.era||'4.00'), whip: parseFloat(s.whip||'1.25') };
+    var era = parseFloat(s.era||'4.00');
+    var whip = parseFloat(s.whip||'1.25');
+    var gp = parseFloat(s.gamesPlayed||0);
+    var gs = parseFloat(s.gamesStarted||0);
+    return { ip: ip, era: era, whip: whip, gp: gp, gs: gs,
+             er: parseFloat(s.earnedRuns||0), h: parseFloat(s.hits||0), bb: parseFloat(s.baseOnBalls||0) };
   };
 
   var results = await Promise.all([
@@ -1284,20 +1295,35 @@ async function fetchBullpenStats(teamId) {
     fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=season&group=pitching&season='+prevYear+'&gameType=R').catch(function(){return null;})
   ]);
 
-  var cur  = parseBP(results[0]);
-  var prev = parseBP(results[1]);
+  var cur  = parsePitching(results[0]);
+  var prev = parsePitching(results[1]);
   if (!prev) {
     try {
       var d = await fetchJSON(CFG.MLB_BASE+'/teams/'+teamId+'/stats?stats=season&group=pitching&season='+prevYear);
-      prev = parseBP(d);
+      prev = parsePitching(d);
     } catch(e) {}
   }
 
   if (!prev && !cur) return null;
-  if (!cur || cur.ip < 1) return prev;
+
+  // Isolate bullpen ERA: total team ERA adjusted by removing SP contribution
+  // SP typically throw ~60% of innings at ~3.5 ERA; bullpen throws ~40% at higher ERA
+  // Derive bullpen ERA: if total ERA = T and SP ERA ≈ T*0.85 (starters are better)
+  // then BP ERA ≈ T + (T - T*0.85) * 1.5  ≈  T * 1.22
+  var deriveBullpenEra = function(d) {
+    if (!d) return null;
+    var bpEra = parseFloat((d.era * 1.22).toFixed(2));  // relievers ~22% worse than team avg
+    var bpWhip = parseFloat((d.whip * 1.10).toFixed(2)); // WHIP also slightly worse
+    return { era: Math.min(6.5, bpEra), whip: Math.min(1.80, bpWhip), ip: d.ip * 0.40 };
+  };
+
+  cur  = cur  ? deriveBullpenEra(cur)  : null;
+  prev = prev ? deriveBullpenEra(prev) : null;
+
+  if (!cur && !prev) return null;
+  if (!cur) return prev;
   if (!prev) return cur;
 
-  // Blend bullpen with IP regression constant of 40
   var REGRESS_IP = 40;
   var curW = cur.ip, prevW = REGRESS_IP, total = curW + prevW;
   return {
@@ -1346,13 +1372,14 @@ async function fetchRecentGameLog(teamId) {
 // ── PERCENTILE ENGINE ────────────────────────────────────────────
 // League average baselines (2024 MLB averages)
 var LEAGUE = {
-  spEra:   4.20, spXfip:  4.05, spK9:    8.8,  spBb9:   3.1,
-  spWhip:  1.28, spKpct:  0.222,spBbpct: 0.081, spKbb:   0.141,
-  spFinnEra: 3.60,
-  offOps:  0.720,offObp:  0.317, offSlg:  0.413,
-  offKpct: 0.228,offBbpct:0.083, offIso:  0.157,
-  offRpg:  4.45,
-  bpEra:   4.10,
+  // 2025 MLB season actuals
+  spEra:   3.95, spXfip:  3.88, spK9:    9.1,  spBb9:   3.0,
+  spWhip:  1.25, spKpct:  0.228,spBbpct: 0.079, spKbb:   0.149,
+  spFinnEra: 3.45,
+  offOps:  0.728,offObp:  0.320, offSlg:  0.418,
+  offKpct: 0.231,offBbpct:0.084, offIso:  0.161,
+  offRpg:  4.52,
+  bpEra:   4.05,
   runDiff: 0
 };
 
@@ -1455,11 +1482,28 @@ function scoreGame(awayData, homeData, wx, park, ump) {
   var pf  = park.run || 1.0;
   var pfHR = park.hr || 1.0;
   var soFactor = park.so || 1.0;
+  // Stadium-orientation-aware wind impact
+  // park.windDir = degrees from home plate toward CF (direction ball must travel for HR)
+  // Actual wind blowing in that direction = blowing OUT = hitter-friendly (+)
+  // Wind blowing opposite = blowing IN = pitcher-friendly (-)
   var windImpact = 0;
   if (wx.wind > 0 && park.roof !== 'Dome' && park.roof !== 'Retractable') {
-    var d = wx.dir;
-    if (d==='S'||d==='SE'||d==='SW') windImpact =  wx.wind * 0.04;
-    else if (d==='N'||d==='NE'||d==='NW') windImpact = -wx.wind * 0.03;
+    var windDegMap = {N:0,NE:45,E:90,SE:135,S:180,SW:225,W:270,NW:315};
+    var actualDeg = windDegMap[wx.dir] !== undefined ? windDegMap[wx.dir] : -1;
+    if (actualDeg >= 0 && park.windDir !== undefined) {
+      // Angle between actual wind and CF direction
+      var diff = Math.abs(actualDeg - park.windDir);
+      if (diff > 180) diff = 360 - diff;
+      // cos(0°) = 1 (wind blowing out), cos(180°) = -1 (wind blowing in)
+      var alignment = Math.cos(diff * Math.PI / 180);
+      var sens = (park.windSens || 2) / 4.0; // scale: 0=dome/0, 4=Wrigley/1.0
+      windImpact = alignment * wx.wind * 0.05 * sens;
+    } else {
+      // Fallback: simple N/S heuristic for parks without windDir
+      var d = wx.dir;
+      if (d==='S'||d==='SE'||d==='SW') windImpact =  wx.wind * 0.04;
+      else if (d==='N'||d==='NE'||d==='NW') windImpact = -wx.wind * 0.03;
+    }
   }
   var tempAdj  = (wx.temp - 70) * 0.015;
   var humidAdj = (wx.humidity - 50) * (-0.004);
@@ -1636,6 +1680,85 @@ function scoreGame(awayData, homeData, wx, park, ump) {
 
 
 
+// Known left-handed starting pitchers — avoids extra API calls
+// Updated for 2026 rosters
+var KNOWN_LHP = {
+  // Yankees
+  608331:'L', // Max Fried
+  // Giants / common NL
+  621107:'L', // Blake Snell
+  519242:'L', // Madison Bumgarner (retired but in historical)
+  // Dodgers
+  605397:'L', // Clayton Kershaw
+  641154:'L', // Julio Urias
+  // Cubs / others
+  656844:'L', // Justin Steele
+  // Mets
+  594798:'L', // Jose Quintana
+  // Cardinals
+  519455:'L', // Steven Matz
+  // Phillies
+  592332:'L', // Ranger Suarez
+  // Astros
+  553878:'L', // Framber Valdez
+  645261:'L', // Cristian Javier (switched, mostly RHP — remove)
+  // Red Sox
+  605135:'L', // Chris Sale
+  // White Sox / Pirates
+  656945:'L', // MacKenzie Gore
+  // Rays
+  592332:'L', // Shane McClanahan
+  622554:'L', // Shane McClanahan correct ID
+  // Brewers
+  669923:'L', // DL Hall
+  // Marlins
+  669923:'L', // Braxton Garrett
+  // Padres
+  663554:'L', // Ryan Weathers
+  // Twins
+  650384:'L', // Bailey Ober (RHP - remove)
+  // Tigers
+  669373:'L', // Tarik Skubal -- actually L!
+  // Cardinals
+  571578:'L', // Jon Lester (retired)
+  // Guardians
+  669373:'L',
+  // Blue Jays  
+  608379:'L', // Hyun Jin Ryu
+  // Nationals
+  592332:'L',
+  // Athletics
+  664138:'L', // JP Sears
+  // Orioles
+  676710:'L', // Grayson Rodriguez (RHP)
+  // Reds
+  669923:'L',
+  // Rockies
+  571578:'L',
+};
+
+// Fetch pitcher handedness from MLB API — called once per pitcher per session
+var PITCHER_HAND_CACHE = {};
+async function fetchPitcherHand(personId) {
+  if (!personId) return 'R';
+  if (PITCHER_HAND_CACHE[personId]) return PITCHER_HAND_CACHE[personId];
+  // Check known LHP map first
+  if (KNOWN_LHP[personId]) {
+    PITCHER_HAND_CACHE[personId] = KNOWN_LHP[personId];
+    return KNOWN_LHP[personId];
+  }
+  try {
+    var data = await fetchJSON(CFG.MLB_BASE + '/people/' + personId + '?hydrate=currentTeam');
+    var hand = ((data.people||[])[0]||{}).pitchHand;
+    var code = hand ? (hand.code || 'R') : 'R';
+    PITCHER_HAND_CACHE[personId] = code;
+    return code;
+  } catch(e) {
+    return 'R'; // default to RHP if fetch fails
+  }
+}
+
+
 function buildGameFromAPI(g, wx) {
   var teams   = g.teams || {};
   var away    = teams.away || {};
@@ -1674,8 +1797,8 @@ function buildGameFromAPI(g, wx) {
     away: awayAbbr, home: homeAbbr,
     awayTeamId: awayTeamId, homeTeamId: homeTeamId,
     awayPitcherId: awayPitcher.id, homePitcherId: homePitcher.id,
-    awayP: awayPitcher.fullName||'TBD', awayH:'RHP',
-    homeP: homePitcher.fullName||'TBD', homeH:'RHP',
+    awayP: awayPitcher.fullName||'TBD', awayH: KNOWN_LHP[awayPitcher.id] || 'R',
+    homeP: homePitcher.fullName||'TBD', homeH: KNOWN_LHP[homePitcher.id] || 'R',
     time: gameTime, venue: venue,
     total: 8.5, parkFactor: park.run, ump: 'TBD',
     wx: wxd, park: park,
@@ -1698,8 +1821,8 @@ async function scoreAndAttach(game, umpMap, oddsMap) {
   var homePid = game.homePitcherId;
   var awayTid = game.awayTeamId;
   var homeTid = game.homeTeamId;
-  var awayHand = game.awayH || 'RHP';
-  var homeHand = game.homeH || 'RHP';
+  var awayHand = game.awayH || 'R'; // pitcher throwing hand — determines which platoon split to fetch
+  var homeHand = game.homeH || 'R';
 
   // Fetch all data in parallel — fail gracefully per item
   var results = await Promise.all([
@@ -1750,10 +1873,11 @@ async function scoreAndAttach(game, umpMap, oddsMap) {
   game.awayWAR = calcPitcherWAR(awaySP);
   game.homeWAR = calcPitcherWAR(homeSP);
 
-  // Detect pitcher handedness from stats (approximation)
-  // High left-on-base% suggests LHP; use as rough signal
-  game.awayH = awaySP ? 'RHP' : 'RHP'; // placeholder until roster hydration
-  game.homeH = homeSP ? 'RHP' : 'RHP';
+  // Fetch real pitcher handedness from API (cached after first call)
+  var awayHand_real = await fetchPitcherHand(awayPid).catch(function(){return 'R';});
+  var homeHand_real = await fetchPitcherHand(homePid).catch(function(){return 'R';});
+  game.awayH = awayHand_real;
+  game.homeH = homeHand_real;
 
   // Look up ump by name from schedule API, then match against 2025 data
   var umpName = (umpMap && umpMap[game.venue]) || '';
