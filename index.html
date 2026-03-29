@@ -1091,6 +1091,64 @@ async function fetchPitcherStats(personId) {
   var R_PROCESS = 50;  // K%, BB%, xFIP, K-BB%
   var R_OUTCOME = 90;  // ERA, WHIP
   var ip = curData.ip;
+
+  // ── DIVERGENCE DETECTION ────────────────────────────────────────
+  // When a pitcher's 2026 stats diverge significantly from 2025 AND
+  // they have enough IP to make it meaningful (5+ starts ≈ 25+ IP),
+  // automatically shift blend weight toward 2026 for diverging stats.
+  // Moderate mode: cut regression constants in half when large divergence confirmed.
+  var divergenceFlags = {};
+  var MIN_IP_FOR_DIVERGENCE = 25; // ~5 starts
+
+  if (ip >= MIN_IP_FOR_DIVERGENCE && prevData) {
+    // K% divergence — most meaningful for KO props
+    var kpctDelta = Math.abs(curData.kpct - prevData.kpct) / Math.max(prevData.kpct, 0.01);
+    if (kpctDelta > 0.15) { // >15% relative change
+      R_PROCESS = Math.round(R_PROCESS * 0.5); // cut to 25 → trust 2026 much more
+      divergenceFlags.kpct = {
+        cur: curData.kpct, prev: prevData.kpct,
+        delta: Math.round(kpctDelta * 100),
+        dir: curData.kpct > prevData.kpct ? 'up' : 'down'
+      };
+    }
+
+    // BB% divergence — meaningful for NRFI and walk rate
+    var bbpctDelta = Math.abs(curData.bbpct - prevData.bbpct) / Math.max(prevData.bbpct, 0.01);
+    if (bbpctDelta > 0.20) { // >20% relative change (BB% is noisier)
+      divergenceFlags.bbpct = {
+        cur: curData.bbpct, prev: prevData.bbpct,
+        delta: Math.round(bbpctDelta * 100),
+        dir: curData.bbpct > prevData.bbpct ? 'up' : 'down'
+      };
+    }
+
+    // ERA divergence — flag but don't auto-adjust (ERA too noisy early)
+    // Only flag if very large AND ip > 40 (more reliable sample)
+    var eraDelta = Math.abs(curData.era - prevData.era) / Math.max(prevData.era, 0.01);
+    if (eraDelta > 0.25 && ip >= 40) {
+      // Moderate ERA adjustment — reduce R_OUTCOME by 30% (not halved like K%)
+      R_OUTCOME = Math.round(R_OUTCOME * 0.70);
+      divergenceFlags.era = {
+        cur: curData.era, prev: prevData.era,
+        delta: Math.round(eraDelta * 100),
+        dir: curData.era > prevData.era ? 'up' : 'down'
+      };
+    }
+
+    // xFIP divergence — most reliable early indicator of true change
+    var xfipDelta = Math.abs(curData.xfip - prevData.xfip) / Math.max(prevData.xfip, 0.01);
+    if (xfipDelta > 0.15 && ip >= 25) {
+      R_PROCESS = Math.min(R_PROCESS, Math.round(50 * 0.5)); // ensure process is reduced
+      divergenceFlags.xfip = {
+        cur: curData.xfip, prev: prevData.xfip,
+        delta: Math.round(xfipDelta * 100),
+        dir: curData.xfip > prevData.xfip ? 'up' : 'down'
+      };
+    }
+  }
+
+  var hasDivergence = Object.keys(divergenceFlags).length > 0;
+
   var blendStat = function(c, p, r) { return (c * ip + p * r) / (ip + r); };
 
   return {
@@ -1105,7 +1163,10 @@ async function fetchPitcherStats(personId) {
     xfip:   parseFloat(blendStat(curData.xfip,   prevData.xfip,   R_PROCESS).toFixed(2)),
     strikeOuts: curData.strikeOuts,
     inningsPitched: ip,
-    veloTrend: 'stable'
+    veloTrend: 'stable',
+    // Divergence metadata — used for game card flags and display
+    divergence: hasDivergence ? divergenceFlags : null,
+    blendAdjusted: hasDivergence // true = auto-adjustment was applied
   };
 }
 
@@ -2144,6 +2205,10 @@ async function scoreAndAttach(game, umpMap, oddsMap) {
   awaySP = applyConfidenceAdjustment(awaySP, awayStarts);
   homeSP = applyConfidenceAdjustment(homeSP, homeStarts);
 
+  // Surface divergence flags from pitcher stats onto game object for display
+  if (awaySP && awaySP.divergence) game.awayDivergence = awaySP.divergence;
+  if (homeSP && homeSP.divergence) game.homeDivergence = homeSP.divergence;
+
   var awayData = {
     abbr: game.away, pitcher: game.awayP,
     pitcherStats: awaySP, firstInnStats: awayFI,
@@ -2942,6 +3007,23 @@ function renderPlays() {
     if (g.flags.injury) flags += '<span class="fg fg-inj">Inj</span>';
     if (g.flags.veloFlag) flags += '<span class="fg fg-vl">Velo</span>';
     if (g.flags.umpFlag) flags += '<span class="fg fg-ump">Ump</span>';
+    // Pitcher divergence — auto-detected stat change from 2025 baseline
+    var addDivFlags = function(div, pitcher, abbr) {
+      if (!div) return;
+      Object.keys(div).forEach(function(stat) {
+        var d = div[stat];
+        var arrow = d.dir === 'up' ? '▲' : '▼';
+        var isGood = (stat==='kpct'&&d.dir==='up')||(stat==='xfip'&&d.dir==='down')||(stat==='era'&&d.dir==='down')||(stat==='bbpct'&&d.dir==='down');
+        var col = isGood ? '#3B6D11' : '#A32D2D';
+        var bg  = isGood ? 'rgba(99,153,34,.12)' : 'rgba(226,75,74,.12)';
+        var bc  = isGood ? 'rgba(99,153,34,.25)' : 'rgba(226,75,74,.25)';
+        var label = {kpct:'K%',bbpct:'BB%',era:'ERA',xfip:'xFIP'}[stat]||stat;
+        flags += '<span class="fg" style="background:'+bg+';color:'+col+';border-color:'+bc+'" title="'+pitcher+' '+label+' '+arrow+' '+d.delta+'% vs 2025 — blend auto-adjusted toward 2026">'+abbr+' '+label+arrow+'</span>';
+      });
+    };
+    addDivFlags(g.awayDivergence, g.awayP, g.away);
+    addDivFlags(g.homeDivergence, g.homeP, g.home);
+    if (g.awayDivergence||g.homeDivergence) flags += '<span class="fg" style="background:rgba(99,153,34,.12);color:#3B6D11;border-color:rgba(99,153,34,.25)" title="Pitcher stat divergence detected — blend auto-adjusted toward 2026">Div</span>';
     var tr = document.createElement('tr');
     tr.className = 'dr';
     (function(game, tkey) {
