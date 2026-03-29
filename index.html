@@ -1980,8 +1980,12 @@ function scoreGame(awayData, homeData, wx, park, ump) {
   var badBP   = Math.min(awyBPp.overall, homBPp.overall) < 0.38;
 
   // Bullpen tired flag
-  // Only flag bullpen tired when fatigue is genuinely high — 0.70+ (was 0.55, too sensitive)
-  var bpTired = Math.max(awyBPp.fatigue, homBPp.fatigue) > 0.70;
+  // Pen flag requires 10+ games in the log to be meaningful
+  // With fewer games, fatigue estimates are too noisy to surface as a signal
+  var awyGames = awyLog ? (awyLog.last7W + awyLog.last7L) : 0;
+  var homGames = homLog ? (homLog.last7W + homLog.last7L) : 0;
+  var enoughData = awyGames >= 5 && homGames >= 5; // both teams need real log data
+  var bpTired = enoughData && Math.max(awyBPp.fatigue, homBPp.fatigue) > 0.70;
 
   // Apply result-based recalibration if enough historical data exists
   // Pulls score toward 50 in buckets where model has been overconfident
