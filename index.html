@@ -1726,7 +1726,8 @@ function offPercents(off) {
 function bpPercents(bp, recentLog) {
   var eraP = bp ? pct(bp.era, LEAGUE.bpEra, 0.80, false) : 0.50;
   // Fatigue: more IP in last 3 days = worse
-  var fatigue = recentLog ? Math.min(1.0, recentLog.bullpenIPLast3 / 12.0) : 0;
+  // When no recent log data, assume neutral fatigue (0.5) not fresh (0) or exhausted (1)
+  var fatigue = recentLog ? Math.min(1.0, recentLog.bullpenIPLast3 / 12.0) : 0.35;
   var fatigueP = 1 - fatigue; // 1 = fresh, 0 = exhausted
   return {
     era: eraP,
@@ -1965,7 +1966,8 @@ function scoreGame(awayData, homeData, wx, park, ump) {
   var badBP   = Math.min(awyBPp.overall, homBPp.overall) < 0.38;
 
   // Bullpen tired flag
-  var bpTired = Math.max(awyBPp.fatigue, homBPp.fatigue) > 0.55;
+  // Only flag bullpen tired when fatigue is genuinely high — 0.70+ (was 0.55, too sensitive)
+  var bpTired = Math.max(awyBPp.fatigue, homBPp.fatigue) > 0.70;
 
   // Apply result-based recalibration if enough historical data exists
   // Pulls score toward 50 in buckets where model has been overconfident
@@ -2261,7 +2263,8 @@ async function scoreAndAttach(game, umpMap, oddsMap) {
   game.flags.correlation   = scored.flags.correlation;
   // Only set umpFlag if a real ump was matched (not the default fallback)
   // Only show ump flag when we have real 2025 data for this ump
-  if (umpData && (Math.abs(umpData.runAdj) > 0.15 || Math.abs(umpData.kAdj) > 0.1)) game.flags.umpFlag = true;
+  // Only flag umps in roughly top/bottom 17% of league — genuinely notable tendencies
+  if (umpData && (Math.abs(umpData.runAdj) > 0.60 || Math.abs(umpData.kAdj) > 0.40)) game.flags.umpFlag = true;
 
   // Bullpen rest display
   game.bullpenRest = {
