@@ -1465,7 +1465,7 @@ async function fetchRecentGameLog(teamId) {
     var data = await fetchJSON(url);
     var games = [];
     (data.dates||[]).forEach(function(d){ (d.games||[]).forEach(function(g){ games.push(g); }); });
-    if (!games.length) return {runDiff:0, last7W:0, last7L:0, bullpenIPLast3:0};
+    if (!games.length) return {runDiff:0, last7W:0, last7L:0, bullpenIPLast3:null}; // null = no data
     var runDiff = 0, wins = 0, losses = 0, bullpenIP = 0;
     games.forEach(function(g) {
       var ls = g.linescore || {};
@@ -1483,9 +1483,20 @@ async function fetchRecentGameLog(teamId) {
     });
     // Only last 3 games for fatigue
     var last3 = games.slice(-3);
-    var bpLast3 = last3.reduce(function(a,g){ return a + Math.max(0, parseInt(((g.linescore||{}).currentInning||9)) - 5.5); }, 0);
+    var bpLast3 = last3.reduce(function(a,g) {
+      var ls = g.linescore || {};
+      var inn = ls.currentInning;
+      // Only count if we have real inning data AND game is final
+      var isFinal = (g.status||{}).abstractGameState === 'Final' || (g.status||{}).detailedState === 'Final';
+      if (!inn || !isFinal) return a; // skip games with no real data
+      var totalInn = parseInt(inn) || 0;
+      if (totalInn < 5) return a; // incomplete game — skip
+      // Estimate SP went ~5.5 innings on average, rest is bullpen
+      var bpInn = Math.max(0, totalInn - 5.5);
+      return a + bpInn;
+    }, 0);
     return { runDiff: runDiff, last7W: wins, last7L: losses, bullpenIPLast3: bpLast3 };
-  } catch(e) { return {runDiff:0, last7W:0, last7L:0, bullpenIPLast3:0}; }
+  } catch(e) { return {runDiff:0, last7W:0, last7L:0, bullpenIPLast3:null}; }
 }
 
 // ── PERCENTILE ENGINE ────────────────────────────────────────────
@@ -1727,7 +1738,10 @@ function bpPercents(bp, recentLog) {
   var eraP = bp ? pct(bp.era, LEAGUE.bpEra, 0.80, false) : 0.50;
   // Fatigue: more IP in last 3 days = worse
   // When no recent log data, assume neutral fatigue (0.5) not fresh (0) or exhausted (1)
-  var fatigue = recentLog ? Math.min(1.0, recentLog.bullpenIPLast3 / 12.0) : 0.35;
+  // Only calculate fatigue when we have real bullpen IP data
+  // null = no data available → use neutral 0.35 (slightly fresh assumption early season)
+  var bpIP = recentLog && recentLog.bullpenIPLast3 != null ? recentLog.bullpenIPLast3 : null;
+  var fatigue = bpIP != null ? Math.min(1.0, bpIP / 12.0) : 0.35;
   var fatigueP = 1 - fatigue; // 1 = fresh, 0 = exhausted
   return {
     era: eraP,
