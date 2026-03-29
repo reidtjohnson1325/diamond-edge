@@ -1085,26 +1085,26 @@ async function fetchPitcherStats(personId) {
   if (!curData || curData.ip < 1) return prevData;
   if (!prevData) return curData;
 
-  // Marcel blend: ip / (ip + 20) for pitchers
-  // At 20 IP (3-4 starts) = 50/50, at 60 IP = 75% current, at 120 IP = 86% current
-  var REGRESS_IP = 20;
-  var curW  = curData.ip;
-  var prevW = REGRESS_IP;
-  var total = curW + prevW;
-  var blendVal = function(c, p) { return (c*curW + p*prevW) / total; };
+  // Stat-specific regression constants for pitcher Marcel blend
+  // Process stats (K%, BB%, xFIP): stabilize ~70 IP → trust 2026 sooner
+  // Outcome stats (ERA, WHIP): stabilize ~100 IP → stay with 2025 longer
+  var R_PROCESS = 50;  // K%, BB%, xFIP, K-BB%
+  var R_OUTCOME = 90;  // ERA, WHIP
+  var ip = curData.ip;
+  var blendStat = function(c, p, r) { return (c * ip + p * r) / (ip + r); };
 
   return {
-    ip: curData.ip,
-    era:    parseFloat(blendVal(curData.era,    prevData.era).toFixed(2)),
-    whip:   parseFloat(blendVal(curData.whip,   prevData.whip).toFixed(2)),
-    kPer9:  parseFloat(blendVal(curData.kPer9,  prevData.kPer9).toFixed(2)),
-    bbPer9: parseFloat(blendVal(curData.bbPer9, prevData.bbPer9).toFixed(2)),
-    kpct:   parseFloat(blendVal(curData.kpct,   prevData.kpct).toFixed(3)),
-    bbpct:  parseFloat(blendVal(curData.bbpct,  prevData.bbpct).toFixed(3)),
-    kbb:    parseFloat(blendVal(curData.kbb,     prevData.kbb).toFixed(3)),
-    xfip:   parseFloat(blendVal(curData.xfip,   prevData.xfip).toFixed(2)),
+    ip: ip,
+    era:    parseFloat(blendStat(curData.era,    prevData.era,    R_OUTCOME).toFixed(2)),
+    whip:   parseFloat(blendStat(curData.whip,   prevData.whip,   R_OUTCOME).toFixed(2)),
+    kPer9:  parseFloat(blendStat(curData.kPer9,  prevData.kPer9,  R_PROCESS).toFixed(2)),
+    bbPer9: parseFloat(blendStat(curData.bbPer9, prevData.bbPer9, R_PROCESS).toFixed(2)),
+    kpct:   parseFloat(blendStat(curData.kpct,   prevData.kpct,   R_PROCESS).toFixed(3)),
+    bbpct:  parseFloat(blendStat(curData.bbpct,  prevData.bbpct,  R_PROCESS).toFixed(3)),
+    kbb:    parseFloat(blendStat(curData.kbb,     prevData.kbb,    R_PROCESS).toFixed(3)),
+    xfip:   parseFloat(blendStat(curData.xfip,   prevData.xfip,   R_PROCESS).toFixed(2)),
     strikeOuts: curData.strikeOuts,
-    inningsPitched: curData.ip,
+    inningsPitched: ip,
     veloTrend: 'stable'
   };
 }
@@ -1235,26 +1235,29 @@ async function fetchTeamStats(teamId) {
     iso: cur.iso, runsPerGame: cur.runs/Math.max(1,cur.gp)
   };
 
-  // Marcel blend: games / (games + 30)
-  // At 30 GP = 50/50, at 60 GP = 67% current, at 100 GP = 77% current
-  var REGRESS_GP = 30;
-  var curW  = cur.gp;
-  var prevW = REGRESS_GP;
-  var total = curW + prevW;
-  var blendVal = function(c, p) { return (c*curW + p*prevW) / total; };
+  // Stat-specific GP regression constants for team hitting Marcel
+  // K%/BB%: fast stabilizers (~15 GP) → trust 2026 sooner
+  // AVG/OBP/SLG/OPS: medium (~50 GP)
+  // ISO/SLG power: slowest (~75 GP) — early HR rates are very noisy
+  var R_RATE  = 20;  // K%, BB%
+  var R_AVG   = 60;  // AVG, OBP, OPS, runs/G
+  var R_POWER = 90;  // SLG, ISO
+  var gp = cur.gp;
+  var blendStat = function(c, p, r) { return (c * gp + p * r) / (gp + r); };
 
   return {
-    avg:  parseFloat(blendVal(cur.avg,   prev.avg).toFixed(3)),
-    obp:  parseFloat(blendVal(cur.obp,   prev.obp).toFixed(3)),
-    slg:  parseFloat(blendVal(cur.slg,   prev.slg).toFixed(3)),
-    ops:  parseFloat(blendVal(cur.ops,   prev.ops).toFixed(3)),
-    woba: parseFloat((blendVal(cur.obp,prev.obp)*0.9+blendVal(cur.slg,prev.slg)*0.3).toFixed(3)),
-    kpct: parseFloat(blendVal(cur.kpct,  prev.kpct).toFixed(3)),
-    bbpct:parseFloat(blendVal(cur.bbpct, prev.bbpct).toFixed(3)),
-    iso:  parseFloat(blendVal(cur.iso,   prev.iso).toFixed(3)),
-    runsPerGame: parseFloat(blendVal(
+    avg:  parseFloat(blendStat(cur.avg,   prev.avg,   R_AVG).toFixed(3)),
+    obp:  parseFloat(blendStat(cur.obp,   prev.obp,   R_AVG).toFixed(3)),
+    slg:  parseFloat(blendStat(cur.slg,   prev.slg,   R_POWER).toFixed(3)),
+    ops:  parseFloat(blendStat(cur.ops,   prev.ops,   R_AVG).toFixed(3)),
+    woba: parseFloat((blendStat(cur.obp,prev.obp,R_AVG)*0.9+blendStat(cur.slg,prev.slg,R_POWER)*0.3).toFixed(3)),
+    kpct: parseFloat(blendStat(cur.kpct,  prev.kpct,  R_RATE).toFixed(3)),
+    bbpct:parseFloat(blendStat(cur.bbpct, prev.bbpct, R_RATE).toFixed(3)),
+    iso:  parseFloat(blendStat(cur.iso,   prev.iso,   R_POWER).toFixed(3)),
+    runsPerGame: parseFloat(blendStat(
       cur.runs/Math.max(1,cur.gp),
-      prev.runs/Math.max(1,prev.gp)
+      prev.runs/Math.max(1,prev.gp),
+      R_AVG
     ).toFixed(2))
   };
 }
@@ -1376,11 +1379,14 @@ async function fetchBullpenStats(teamId) {
   if (!cur) return prev;
   if (!prev) return cur;
 
-  var REGRESS_IP = 40;
-  var curW = cur.ip, prevW = REGRESS_IP, total = curW + prevW;
+  // Bullpen ERA is high-variance — needs more IP to trust → higher regress
+  var R_BP_ERA  = 60; // ERA stabilizes slowly for bullpens
+  var R_BP_WHIP = 50; // WHIP slightly faster
+  var ip = cur.ip;
+  var blendBP = function(c, p, r) { return (c*ip + p*r) / (ip + r); };
   return {
-    era:  parseFloat(((cur.era*curW  + prev.era*prevW)  / total).toFixed(2)),
-    whip: parseFloat(((cur.whip*curW + prev.whip*prevW) / total).toFixed(2)),
+    era:  parseFloat(blendBP(cur.era,  prev.era,  R_BP_ERA).toFixed(2)),
+    whip: parseFloat(blendBP(cur.whip, prev.whip, R_BP_WHIP).toFixed(2)),
     ip: cur.ip
   };
 }
@@ -1546,38 +1552,48 @@ async function fetchLeagueAverages() {
 
     // Marcel blend: weight 2026 by games played, regress to 2025
     // Use team-games equivalent: pitching IP / 9 ≈ team games
-    var REGRESS = 30; // games worth of prior season data
-    var curGP = spStats ? spStats.ip / 9 : (offStats ? offStats.gp / 30 : 0);
-    var curW  = Math.max(0, curGP);
-    var prevW = REGRESS;
-    var total = curW + prevW;
-    var blend = function(cur, prev) {
-      return parseFloat(((cur * curW + prev * prevW) / total).toFixed(4));
+    // Stat-specific regression constants for league averages
+    // curGP = average games played per team this season
+    var curGP = offStats && offStats.gp ? offStats.gp / 30
+              : spStats && spStats.gp   ? spStats.gp / 30
+              : 0;
+    curGP = Math.max(0, curGP);
+
+    // Different stats stabilize at different rates — use targeted constants
+    var RL_PROCESS = 50;  // K%, BB%, xFIP — fast stabilizers (~70 IP = ~20 team-games)
+    var RL_OUTCOME = 90;  // ERA, WHIP — slower stabilizers (~100 IP = ~30 team-games)
+    var RL_POWER   = 130; // ISO, SLG — slowest (need ~75+ games)
+    var RL_RATE    = 40;  // K%/BB% for hitters — fast
+
+    var blendL = function(cur, prev, regress) {
+      var cw = curGP, pw = regress, t = cw + pw;
+      return parseFloat(((cur * cw + prev * pw) / t).toFixed(4));
     };
 
     if (spStats) {
-      LEAGUE.spEra    = blend(spStats.era,   LEAGUE_2025.spEra);
-      LEAGUE.spXfip   = blend(spStats.xfip,  LEAGUE_2025.spXfip);
-      LEAGUE.spK9     = blend(spStats.k9,    LEAGUE_2025.spK9);
-      LEAGUE.spBb9    = blend(spStats.bb9,   LEAGUE_2025.spBb9);
-      LEAGUE.spWhip   = blend(spStats.whip,  LEAGUE_2025.spWhip);
-      LEAGUE.spKpct   = blend(spStats.kpct,  LEAGUE_2025.spKpct);
-      LEAGUE.spBbpct  = blend(spStats.bbpct, LEAGUE_2025.spBbpct);
-      LEAGUE.spKbb    = blend(spStats.kbb,   LEAGUE_2025.spKbb);
-      LEAGUE.bpEra    = blend(spStats.era * 1.22, LEAGUE_2025.bpEra);
+      LEAGUE.spEra    = blendL(spStats.era,        LEAGUE_2025.spEra,    RL_OUTCOME);
+      LEAGUE.spXfip   = blendL(spStats.xfip,       LEAGUE_2025.spXfip,   RL_PROCESS);
+      LEAGUE.spK9     = blendL(spStats.k9,         LEAGUE_2025.spK9,     RL_PROCESS);
+      LEAGUE.spBb9    = blendL(spStats.bb9,        LEAGUE_2025.spBb9,    RL_PROCESS);
+      LEAGUE.spWhip   = blendL(spStats.whip,       LEAGUE_2025.spWhip,   RL_OUTCOME);
+      LEAGUE.spKpct   = blendL(spStats.kpct,       LEAGUE_2025.spKpct,   RL_PROCESS);
+      LEAGUE.spBbpct  = blendL(spStats.bbpct,      LEAGUE_2025.spBbpct,  RL_PROCESS);
+      LEAGUE.spKbb    = blendL(spStats.kbb,        LEAGUE_2025.spKbb,    RL_PROCESS);
+      LEAGUE.bpEra    = blendL(spStats.era * 1.22, LEAGUE_2025.bpEra,    RL_OUTCOME);
     }
     if (offStats) {
-      LEAGUE.offOps   = blend(offStats.ops,   LEAGUE_2025.offOps);
-      LEAGUE.offObp   = blend(offStats.obp,   LEAGUE_2025.offObp);
-      LEAGUE.offSlg   = blend(offStats.slg,   LEAGUE_2025.offSlg);
-      LEAGUE.offKpct  = blend(offStats.kpct,  LEAGUE_2025.offKpct);
-      LEAGUE.offBbpct = blend(offStats.bbpct, LEAGUE_2025.offBbpct);
-      LEAGUE.offIso   = blend(offStats.iso,   LEAGUE_2025.offIso);
-      LEAGUE.offRpg   = blend(offStats.rpg,   LEAGUE_2025.offRpg);
+      LEAGUE.offOps   = blendL(offStats.ops,   LEAGUE_2025.offOps,   RL_OUTCOME);
+      LEAGUE.offObp   = blendL(offStats.obp,   LEAGUE_2025.offObp,   RL_OUTCOME);
+      LEAGUE.offSlg   = blendL(offStats.slg,   LEAGUE_2025.offSlg,   RL_POWER);
+      LEAGUE.offKpct  = blendL(offStats.kpct,  LEAGUE_2025.offKpct,  RL_RATE);
+      LEAGUE.offBbpct = blendL(offStats.bbpct, LEAGUE_2025.offBbpct, RL_RATE);
+      LEAGUE.offIso   = blendL(offStats.iso,   LEAGUE_2025.offIso,   RL_POWER);
+      LEAGUE.offRpg   = blendL(offStats.rpg,   LEAGUE_2025.offRpg,   RL_OUTCOME);
     }
+    // Use process stat blend % for display (most aggressive = most visible)
+    var pct2026 = curGP > 0 ? Math.round(curGP / (curGP + RL_PROCESS) * 100) : 0;
 
-    var pct2026 = Math.round(curW / total * 100);
-    console.log('League averages updated: ' + pct2026 + '% 2026 / ' + (100-pct2026) + '% 2025 | SP ERA: ' + LEAGUE.spEra.toFixed(2) + ' | Off OPS: ' + LEAGUE.offOps.toFixed(3));
+    console.log('League averages updated — process stats: ' + pct2026 + '% 2026 | SP ERA: ' + LEAGUE.spEra.toFixed(2) + ' xFIP: ' + LEAGUE.spXfip.toFixed(2) + ' | Off OPS: ' + LEAGUE.offOps.toFixed(3));
     updateLeagueDisplay(pct2026, curGP);
 
   } catch(e) {
