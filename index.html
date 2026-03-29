@@ -441,7 +441,58 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
   <!-- BET LOG -->
   <div class="sec">
     <div class="st">Bet log <span class="ss">Mark results after each game</span></div>
-    <button class="fb" onclick="exportCSV()" style="color:var(--tl);border-color:rgba(45,212,191,.3)">Export CSV</button>
+    <div style="display:flex;gap:8px">
+      <button class="fb" onclick="exportCSV()" style="color:var(--tl);border-color:rgba(45,212,191,.3)">Export CSV</button>
+      <button class="fb" onclick="toggleMissedBet()" id="missed-bet-btn" style="color:var(--am);border-color:rgba(245,158,11,.3)">+ Log missed bet</button>
+    </div>
+  </div>
+  <!-- MISSED BET ENTRY FORM -->
+  <div id="missed-bet-form" style="display:none;background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;margin-bottom:16px">
+    <div style="font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin-bottom:12px">Log a missed bet</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;color:var(--mu)">Date</label>
+        <input type="date" id="mb-date" style="background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none;width:130px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;color:var(--mu)">Bet type</label>
+        <select id="mb-type" style="background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none">
+          <option value="ML">ML</option>
+          <option value="O/U">O/U</option>
+          <option value="NRFI">NRFI</option>
+          <option value="YRFI">YRFI</option>
+          <option value="KO">KO</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px" id="mb-line-wrap">
+        <label style="font-size:10px;color:var(--mu)">Line (optional)</label>
+        <input type="text" id="mb-line" placeholder="e.g. 7.5, 8.5" style="background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none;width:90px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;color:var(--mu)">Odds</label>
+        <input type="text" id="mb-odds" placeholder="-115" style="background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none;width:80px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;color:var(--mu)">Units</label>
+        <input type="number" id="mb-units" value="1" min="0.1" step="0.5" style="background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none;width:60px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;color:var(--mu)">Result</label>
+        <select id="mb-result" style="background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none">
+          <option value="">Pending</option>
+          <option value="win">Win</option>
+          <option value="loss">Loss</option>
+          <option value="push">Push</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:10px;color:var(--mu)">Notes (optional)</label>
+        <input type="text" id="mb-notes" placeholder="e.g. LAD ML, Under 7" style="background:var(--sf2);border:1px solid var(--bd2);border-radius:5px;padding:4px 8px;color:var(--tx);font-family:var(--fm);font-size:11px;outline:none;width:160px">
+      </div>
+      <button onclick="logMissedBet()" style="background:var(--acd);border:1px solid rgba(240,192,64,.4);border-radius:5px;color:var(--ac);font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:6px 12px;cursor:pointer;white-space:nowrap">Save bet</button>
+    </div>
+    <div id="mb-error" style="font-size:11px;color:var(--rd);margin-top:8px;display:none"></div>
   </div>
   <div id="logEmpty" class="empty" style="display:none">
     <div class="emp-i">&#9918;</div>
@@ -2946,6 +2997,83 @@ function renderCards() {
 // TRACKER DATA — localStorage
 // ═══════════════════════════════════════════════
 // ═══════════════════════════════════════════════
+// MISSED BET LOGGING
+// ═══════════════════════════════════════════════
+function toggleMissedBet() {
+  var form = document.getElementById('missed-bet-form');
+  var btn  = document.getElementById('missed-bet-btn');
+  if (!form) return;
+  var showing = form.style.display !== 'none';
+  form.style.display = showing ? 'none' : 'block';
+  btn.textContent = showing ? '+ Log missed bet' : '✕ Cancel';
+  // Pre-fill date to yesterday if empty
+  if (!showing) {
+    var dateEl = document.getElementById('mb-date');
+    if (dateEl && !dateEl.value) {
+      var yesterday = new Date(Date.now() - 24*60*60*1000);
+      dateEl.value = yesterday.toISOString().slice(0,10);
+    }
+  }
+}
+
+function logMissedBet() {
+  var date   = document.getElementById('mb-date').value;
+  var type   = document.getElementById('mb-type').value;
+  var line   = document.getElementById('mb-line').value.trim();
+  var odds   = document.getElementById('mb-odds').value.trim();
+  var units  = parseFloat(document.getElementById('mb-units').value) || 1;
+  var result = document.getElementById('mb-result').value;
+  var notes  = document.getElementById('mb-notes').value.trim();
+  var errEl  = document.getElementById('mb-error');
+
+  if (!date) { errEl.textContent = 'Please select a date'; errEl.style.display='block'; return; }
+  if (!odds) { errEl.textContent = 'Odds are required'; errEl.style.display='block'; return; }
+  errEl.style.display = 'none';
+
+  var play = notes || (line ? type + ' ' + line : type);
+  var pl = result ? calcPL(odds, units, result) : null;
+
+  BET_LOG.push({
+    id: Date.now(),
+    playId: date + '_manual_' + Date.now(),
+    date: date,
+    matchup: notes || 'Manual entry',
+    type: type,
+    play: play,
+    line: line || null,
+    odds: odds,
+    units: units,
+    score: null,  // no model score for manual bets
+    conf: 'Manual',
+    result: result || '',
+    pl: pl,
+    manual: true
+  });
+
+  saveBets();
+  renderBetLog();
+  updateTrackerStats();
+
+  // Reset form
+  document.getElementById('mb-odds').value = '';
+  document.getElementById('mb-line').value = '';
+  document.getElementById('mb-notes').value = '';
+  document.getElementById('mb-result').value = '';
+  document.getElementById('mb-units').value = '1';
+
+  // Flash confirmation
+  var btn = document.getElementById('missed-bet-btn');
+  var orig = btn.textContent;
+  btn.textContent = '✓ Saved!';
+  btn.style.color = 'var(--gn)';
+  setTimeout(function() {
+    btn.textContent = orig;
+    btn.style.color = '';
+  }, 1500);
+}
+
+
+// ═══════════════════════════════════════════════
 // RESULT-BASED RECALIBRATION
 // Tracks win rates by bet type and score bucket
 // Applies multipliers after 30+ results per type
@@ -3272,7 +3400,7 @@ function renderBetLog() {
     // Units
     tr.appendChild(td(bet.units + 'u', 'font-family:var(--fm)'));
     // Score
-    tr.appendChild(td(String(bet.score), 'font-family:var(--fm);color:var(--mu)'));
+    tr.appendChild(td(bet.score != null ? String(bet.score) : '--', 'font-family:var(--fm);color:var(--mu)'));
     // Confidence
     var confSpan = document.createElement('span');
     confSpan.className = 'cf ' + cc;
