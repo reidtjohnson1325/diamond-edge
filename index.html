@@ -2584,148 +2584,97 @@ function parseLineupPaste() {
   var lineups = {};
   var found = 0;
 
-  // ── Rotowire parser — handles both copy formats ──────────────────
-  // Format A (web/mobile): "1B M. Vargas R" — pos+name+hand on one line
-  // Format B (desktop):    position alone, then "Name Hand" on next line
-  var MLB_ABBRS = {WSH:1,PHI:1,NYY:1,NYM:1,BOS:1,TOR:1,TB:1,BAL:1,CLE:1,DET:1,
+  // ── Rotowire lineup parser ───────────────────────────────────────
+  // Handles Rotowire copy-paste from daily-lineups.php
+  // Format: two-column page copies as interleaved lines
+  // Team abbrs at top (WSH/WSH/PHI/PHI due to logo+header),
+  // two "Confirmed Lineup" lines back-to-back,
+  // then team 1 players, then "Home Run Odds"/"Starting Pitcher Intel" separator,
+  // then team 2 players
+  var MLB_ABBRS_P = {WSH:1,PHI:1,NYY:1,NYM:1,BOS:1,TOR:1,TB:1,BAL:1,CLE:1,DET:1,
     KC:1,MIN:1,CWS:1,HOU:1,LAA:1,OAK:1,SEA:1,TEX:1,ATL:1,MIA:1,CHC:1,CIN:1,
     MIL:1,PIT:1,STL:1,ARI:1,COL:1,LAD:1,SD:1,SF:1,ATH:1,SDP:1};
-  var BPOS = {CF:1,LF:1,RF:1,SS:1,'2B':1,'3B':1,'1B':1,C:1,DH:1,SP:1,RP:1,P:1};
-  var SKIP_RW = ['Home Run Odds','Starting Pitcher Intel','Watch Now','Tickets',
-    'Alerts','Umpire','Precipitation','Wind','Dome','Starting Pitcher',
-    'Confirmed Lineup','Expected Lineup','Projected Lineup'];
+  var BPOS_P = {CF:1,LF:1,RF:1,SS:1,'2B':1,'3B':1,'1B':1,C:1,DH:1,SP:1,RP:1,P:1};
 
-  // Clean lines — strip asterisks/bullets from desktop format
-  var rwLines = raw.split(/\n/).map(function(l){
-    return l.trim().replace(/^[*\u2022\u00B7]+\s*/,'');
-  }).filter(Boolean);
+  var rwLines = raw.split(/\n/).map(function(l){ return l.trim().replace(/^[*\u2022]+\s*/,''); }).filter(Boolean);
 
-  // Detect Format C: paste came in as one long space-separated string
-  // (happens when copying from Rotowire web — browser collapses whitespace)
-  // Signature: contains "Confirmed Lineup" as a substring (not on its own line)
-  var rawTrimmed = raw.trim();
-  var isFormatC = rawTrimmed.indexOf('Confirmed Lineup') !== -1 &&
-                  rawTrimmed.split('\n').length < 5; // few newlines = collapsed
+  // Collect unique team abbreviations in order from top of paste
+  var teamOrder = [];
+  rwLines.slice(0, Math.min(15, rwLines.length)).forEach(function(line) {
+    if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS_P[line] && !BPOS_P[line] && teamOrder.indexOf(line) === -1)
+      teamOrder.push(line);
+  });
 
-  if (isFormatC) {
-    // ── Format C: space-collapsed "Confirmed Lineup" delimited ────
-    var SKIP_C = {'Home':1,'Run':1,'Odds':1,'Starting':1,'Pitcher':1,'Intel':1,
-      'Watch':1,'Now':1,'Tickets':1,'Alerts':1,'Umpire':1,'ERA':1,'LINE':1,'Dome':1};
-    // Split on "Confirmed Lineup" — each chunk is one team's block
-    var clParts = rawTrimmed.split('Confirmed Lineup');
-    // preamble (clParts[0]) contains team abbrs
-    var clTeamOrder = [];
+  // Parse: "Home Run Odds" or "Starting Pitcher Intel" separates team 1 from team 2
+  // "Confirmed Lineup" (may appear twice back-to-back) starts lineup parsing
+  var teamIdx = 0;
+  var inLineup = false;
+
+  rwLines.forEach(function(line) {
+    // Team separator — advance to next team
+    if (line.indexOf('Home Run Odds') !== -1 || line.indexOf('Starting Pitcher Intel') !== -1) {
+      if (inLineup && teamIdx < teamOrder.length - 1) teamIdx++;
+      return;
+    }
+    // Lineup start marker
+    if (line.indexOf('Confirmed Lineup') !== -1 || line.indexOf('Expected Lineup') !== -1 || line.indexOf('Projected Lineup') !== -1) {
+      inLineup = true;
+      return;
+    }
+    if (!inLineup) return;
+    // Skip junk lines
+    if (/^\d+-\d+/.test(line) || line.indexOf('ERA') !== -1) return;
+    if (/^[A-Z][a-z].*\(\d+-\d+\)/.test(line)) return;
+    if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS_P[line] && !BPOS_P[line]) return;
+    if (teamIdx >= teamOrder.length) return;
+
+    // Player line: "RF James Wood L" or "1B Bryce Harper L"
+    var m = line.match(/^(CF|LF|RF|SS|2B|3B|1B|DH|C|SP|RP|P)\s+(.+?)\s+([LRS])$/);
+    if (m) {
+      var name = m[2].replace(/\s+/g,' ').trim();
+      if (name.length >= 3 && name.length <= 35) {
+        var team = teamOrder[teamIdx];
+        if (!lineups[team]) lineups[team] = [];
+        lineups[team].push({pos: m[1], name: name, hand: m[3]});
+        found++;
+      }
+    }
+  });
+
+  // Fallback: if teamOrder empty or nothing found, try Format C (space-collapsed)
+  if (found === 0 && raw.indexOf('Confirmed Lineup') !== -1) {
+    var clParts = raw.split('Confirmed Lineup');
+    var fbTeamOrder = [];
     clParts[0].split(/\s+/).forEach(function(t) {
-      if (/^[A-Z]{2,3}$/.test(t) && MLB_ABBRS[t] && !BPOS[t] && clTeamOrder.indexOf(t) === -1)
-        clTeamOrder.push(t);
+      if (/^[A-Z]{2,3}$/.test(t) && MLB_ABBRS_P[t] && !BPOS_P[t] && fbTeamOrder.indexOf(t) === -1)
+        fbTeamOrder.push(t);
     });
+    var SKIP_FB = {Home:1,Run:1,Odds:1,Starting:1,Pitcher:1,Intel:1,Watch:1,Now:1,Tickets:1,Alerts:1,ERA:1};
     clParts.slice(1).forEach(function(block, bi) {
-      if (bi >= clTeamOrder.length) return;
-      var team = clTeamOrder[bi];
+      if (bi >= fbTeamOrder.length) return;
+      var team = fbTeamOrder[bi];
       if (!lineups[team]) lineups[team] = [];
       var tokens = block.split(/\s+/).filter(Boolean);
       var ti = 0;
       while (ti < tokens.length) {
         var tok = tokens[ti];
-        if (SKIP_C[tok] || /^\d+-\d+$/.test(tok) || /^\.\d+$/.test(tok)) { ti++; continue; }
-        if (BPOS[tok]) {
+        if (SKIP_FB[tok] || /^\d+-\d+$/.test(tok)) { ti++; continue; }
+        if (BPOS_P[tok]) {
           var pos = tok; ti++;
-          var nameParts = [];
+          var np = [];
           while (ti < tokens.length) {
             var t2 = tokens[ti];
-            if ((t2 === 'L' || t2 === 'R' || t2 === 'S') && nameParts.length) {
-              var nm = nameParts.join(' ');
-              if (nm.length >= 3 && nm.length <= 35) {
-                lineups[team].push({pos:pos, name:nm, hand:t2});
-                found++;
-              }
+            if ((t2==='L'||t2==='R'||t2==='S') && np.length) {
+              var nm = np.join(' ');
+              if (nm.length >= 3 && nm.length <= 35) { lineups[team].push({pos:pos,name:nm,hand:t2}); found++; }
               ti++; break;
-            } else if (BPOS[t2] || SKIP_C[t2] || /^\d/.test(t2)) { break; }
-            else { nameParts.push(t2); ti++; }
+            } else if (BPOS_P[t2] || SKIP_FB[t2] || /^\d/.test(t2)) { break; }
+            else { np.push(t2); ti++; }
           }
         } else { ti++; }
       }
     });
-
-  } else {
-  // Detect format: if any line matches "POS Name Hand" it's Format A
-  var isFormatA = rwLines.some(function(l){
-    return /^(CF|LF|RF|SS|2B|3B|1B|DH|C|SP|RP|P)\s+.+\s+[LRS]$/.test(l);
-  });
-
-  if (isFormatA) {
-    // ── Format A: single-line "POS Name Hand" ─────────────────────
-    var currentTeam = null;
-    rwLines.forEach(function(line) {
-      // Skip non-player lines
-      if (SKIP_RW.some(function(s){ return line.indexOf(s) !== -1; })) return;
-      if (/^\d+-\d+/.test(line) || line.indexOf('ERA') !== -1) return;
-      if (/^[A-Z][a-z].*\(\d+-\d+\)/.test(line)) return; // "Nationals (2-1)"
-
-      // Team abbreviation line
-      if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS[line] && !BPOS[line]) {
-        currentTeam = line;
-        if (!lineups[currentTeam]) lineups[currentTeam] = [];
-        return;
-      }
-
-      // Player line: "1B M. Vargas R" or "LF Austin Hays R"
-      var m = line.match(/^(CF|LF|RF|SS|2B|3B|1B|DH|C|SP|RP|P)\s+(.+?)\s+([LRS])$/);
-      if (m && currentTeam) {
-        var name = m[2].replace(/\s+/g,' ').trim();
-        if (name.length >= 3 && name.length <= 35) {
-          lineups[currentTeam].push({pos: m[1], name: name, hand: m[3]});
-          found++;
-        }
-      }
-    });
-
-  } else {
-    // ── Format B: two-line desktop format ─────────────────────────
-    // Collect team abbreviations from top of paste
-    var teamOrder = [];
-    rwLines.slice(0, Math.min(20, rwLines.length)).forEach(function(line) {
-      if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS[line] && !BPOS[line] && teamOrder.indexOf(line) === -1) {
-        teamOrder.push(line);
-      }
-    });
-
-    var teamIdx = -1;
-    var pendingPos = null;
-
-    rwLines.forEach(function(line) {
-      // Lineup marker advances to next team
-      if (/^(Confirmed|Expected|Projected)\s+Lineup/.test(line)) {
-        teamIdx++;
-        pendingPos = null;
-        return;
-      }
-      // Position line — must check BEFORE team abbr filter
-      if (BPOS[line]) { pendingPos = line; return; }
-      // Skip non-player lines
-      if (SKIP_RW.some(function(s){ return line.indexOf(s) !== -1; })) return;
-      if (/^\d+-\d+/.test(line) || line.indexOf('ERA') !== -1) return;
-      if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS[line]) return;
-      if (/^[A-Z][a-z].*\(\d+-\d+\)/.test(line)) return;
-      if (teamIdx < 0 || teamIdx >= teamOrder.length) return;
-
-      // Player name + hand
-      var nm = line.match(/^([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){1,3})\s+([LRS])$/);
-      if (nm && pendingPos) {
-        var name = nm[1].replace(/\s+/g,' ').trim();
-        if (name.split(' ').length >= 2 && name.length >= 4 && name.length <= 35) {
-          var team = teamOrder[teamIdx];
-          if (!lineups[team]) lineups[team] = [];
-          lineups[team].push({pos: pendingPos, name: name, hand: nm[2]});
-          found++;
-        }
-        pendingPos = null;
-      } else {
-        pendingPos = null;
-      }
-    });
-  } // end isFormatA/B
-  } // end isFormatC else
+  }
 
   if (!found || !Object.keys(lineups).length) {
     status.textContent = 'Could not parse — try copying just the lineups section, not the whole page.';
