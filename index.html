@@ -2584,79 +2584,74 @@ function parseLineupPaste() {
   var lineups = {};
   var found = 0;
 
-  // ── Strategy 1: Rotowire format "POS FirstInitial. LastName Hand"
-  // e.g. "CF C. Mullins L" or "1B P. Goldschmidt R"
-  // Also handles bullet separators: "CF C. Mullins L · SS ..."
-  var lines = raw.split(/[\n\u00B7\u2022|]+/).map(function(l){ return l.trim(); }).filter(Boolean);
-  var currentTeam = null;
-  var currentOrder = [];
+  // ── Rotowire two-line format parser ─────────────────────────────
+  // Rotowire copy-paste format:
+  //   WSH          ← team abbr
+  //   PHI          ← team abbr  
+  //   * Confirmed Lineup   ← signals start of team's batting order
+  //   * RF         ← position on its own line
+  //   James Wood L ← player name + handedness on next line
+  //   * 1B
+  //   Luis Garcia L
+  //   ...
+  var MLB_ABBRS = {WSH:1,PHI:1,NYY:1,NYM:1,BOS:1,TOR:1,TB:1,BAL:1,CLE:1,DET:1,
+    KC:1,MIN:1,CWS:1,HOU:1,LAA:1,OAK:1,SEA:1,TEX:1,ATL:1,MIA:1,CHC:1,CIN:1,
+    MIL:1,PIT:1,STL:1,ARI:1,COL:1,LAD:1,SD:1,SF:1,ATH:1,SDP:1,SLC:1};
+  var BPOS = {CF:1,LF:1,RF:1,SS:1,'2B':1,'3B':1,'1B':1,C:1,DH:1,SP:1,RP:1,P:1};
+  var SKIP_RW = ['Home Run Odds','Starting Pitcher Intel','Watch Now','Tickets',
+    'Alerts','Umpire','Precipitation','Wind','Dome','Starting Pitcher'];
 
-  lines.forEach(function(line) {
-    // Detect team name lines — Rotowire uses team name as section header
-    // Match lines that are just a team name (short, no position prefix)
-    var teamMatch = line.match(/^([A-Z][a-z]+ ?[A-Z]?[a-z]*(?:\s[A-Z][a-z]+)?)$/);
-    // Check if line starts with a position
-    var posMatch = line.match(/^(CF|LF|RF|SS|2B|3B|1B|DH|C|SP|RP|P)\s+([A-Z]\.\s*[A-Z][a-z']+(?:\s[A-Z][a-z']+)?)\s+([LRS])/);
+  var rwLines = raw.split(/\n/).map(function(l){ return l.trim().replace(/^[*\u2022]+\s*/,''); }).filter(Boolean);
 
-    if (posMatch) {
-      var pos  = posMatch[1];
-      var name = posMatch[2].replace(/\s+/g,' ').trim();
-      var hand = posMatch[3];
-      if (currentTeam) {
-        if (!lineups[currentTeam]) lineups[currentTeam] = [];
-        lineups[currentTeam].push({pos:pos, name:name, hand:hand});
-        found++;
-      }
-    } else {
-      // Try to detect a team name — look for known MLB team words
-      var teamWords = ['Yankees','Red Sox','Blue Jays','Rays','Orioles','White Sox','Guardians',
-        'Tigers','Royals','Twins','Astros','Angels','Athletics','Mariners','Rangers',
-        'Braves','Marlins','Mets','Phillies','Nationals','Cubs','Reds','Brewers',
-        'Pirates','Cardinals','Diamondbacks','Rockies','Dodgers','Padres','Giants',
-        'Brewers','Guardians'];
-      var isTeam = teamWords.some(function(t){ return line.indexOf(t) !== -1; });
-      if (isTeam && line.length < 40) {
-        if (currentTeam && currentOrder.length) lineups[currentTeam] = currentOrder;
-        currentTeam = line.replace(/[^a-zA-Z\s]/g,'').trim();
-        currentOrder = [];
-      }
+  // First pass: collect team abbreviations in order (appear at top of each game card)
+  var teamOrder = [];
+  rwLines.slice(0, Math.min(20, rwLines.length)).forEach(function(line) {
+    if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS[line] && !BPOS[line] && teamOrder.indexOf(line) === -1) {
+      teamOrder.push(line);
     }
   });
 
-  // ── Strategy 2: If strategy 1 found nothing, try looser number-prefixed format
-  // e.g. "1. Freddie Freeman 1B L" or "1) Freddie Freeman (1B)"
-  if (found === 0) {
-    var numLines = raw.split('\n');
+  // Second pass: parse lineups
+  var teamIdx = -1;
+  var pendingPos = null;
 
-    numLines.forEach(function(line) {
-      var m = line.match(/^\s*(\d+)[.)]\s+([A-Z][a-z]+(?:\s[A-Z][a-z']+)+)\s+([A-Z]{1,2})\s*([LRS]?)/);
-      if (m) {
-        var num  = parseInt(m[1]);
-        var name = m[2].trim();
-        var pos  = m[3];
-        var hand = m[4] || '?';
-        if (num >= 1 && num <= 9 && POS_LIST.indexOf(pos) !== -1) {
-          if (!lineups['Parsed']) lineups['Parsed'] = [];
-          lineups['Parsed'].push({order:num, pos:pos, name:name, hand:hand});
-          found++;
-        }
-      }
-    });
-  }
-
-  // ── Strategy 3: Last resort — extract any name+position pairs
-  if (found === 0) {
-    var tokens = raw.match(/([A-Z][a-z]+(?:\s[A-Z][a-z']+)+)\s+(CF|LF|RF|SS|2B|3B|1B|DH|C)/g);
-    if (tokens && tokens.length) {
-      lineups['Detected'] = tokens.map(function(t) {
-        var parts = t.trim().split(/\s+/);
-        var pos = parts.pop();
-        return {name: parts.join(' '), pos: pos, hand: '?'};
-      });
-      found = lineups['Detected'].length;
+  rwLines.forEach(function(line) {
+    // Lineup marker — advance to next team in order
+    if (/^(Confirmed|Expected|Projected)\s+Lineup/.test(line)) {
+      teamIdx++;
+      pendingPos = null;
+      return;
     }
-  }
+    // CHECK POSITIONS FIRST — RF/SS/DH/CF/LF would match team abbr pattern otherwise
+    if (BPOS[line]) {
+      pendingPos = line;
+      return;
+    }
+    // Skip non-player lines
+    if (SKIP_RW.some(function(s){ return line.indexOf(s) !== -1; })) return;
+    if (/^\d+-\d+/.test(line) || line.indexOf('ERA') !== -1) return;
+    // Skip team abbrs (now safe — positions already handled above)
+    if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS[line]) return;
+    // Skip full team name lines like "Nationals (2-1)"
+    if (/^[A-Z][a-z].*\(\d+-\d+\)/.test(line)) return;
+    if (teamIdx < 0 || teamIdx >= teamOrder.length) return;
 
+    // Player name + hand: "James Wood L" or "K. Schwarber L" or "CJ Abrams L"
+    var nm = line.match(/^([A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){1,3})\s+([LRS])$/);
+    if (nm && pendingPos) {
+      var name = nm[1].replace(/\s+/g,' ').trim();
+      var hand = nm[2];
+      if (name.split(' ').length >= 2 && name.length >= 4 && name.length <= 35) {
+        var team = teamOrder[teamIdx];
+        if (!lineups[team]) lineups[team] = [];
+        lineups[team].push({pos: pendingPos, name: name, hand: hand});
+        found++;
+      }
+      pendingPos = null;
+    } else {
+      pendingPos = null;
+    }
+  });
   if (!found || !Object.keys(lineups).length) {
     status.textContent = 'Could not parse — try copying just the lineups section, not the whole page.';
     status.style.color = 'var(--rd)';
