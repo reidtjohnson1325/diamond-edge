@@ -2600,6 +2600,54 @@ function parseLineupPaste() {
     return l.trim().replace(/^[*\u2022\u00B7]+\s*/,'');
   }).filter(Boolean);
 
+  // Detect Format C: paste came in as one long space-separated string
+  // (happens when copying from Rotowire web — browser collapses whitespace)
+  // Signature: contains "Confirmed Lineup" as a substring (not on its own line)
+  var rawTrimmed = raw.trim();
+  var isFormatC = rawTrimmed.indexOf('Confirmed Lineup') !== -1 &&
+                  rawTrimmed.split('\n').length < 5; // few newlines = collapsed
+
+  if (isFormatC) {
+    // ── Format C: space-collapsed "Confirmed Lineup" delimited ────
+    var SKIP_C = {'Home':1,'Run':1,'Odds':1,'Starting':1,'Pitcher':1,'Intel':1,
+      'Watch':1,'Now':1,'Tickets':1,'Alerts':1,'Umpire':1,'ERA':1,'LINE':1,'Dome':1};
+    // Split on "Confirmed Lineup" — each chunk is one team's block
+    var clParts = rawTrimmed.split('Confirmed Lineup');
+    // preamble (clParts[0]) contains team abbrs
+    var clTeamOrder = [];
+    clParts[0].split(/\s+/).forEach(function(t) {
+      if (/^[A-Z]{2,3}$/.test(t) && MLB_ABBRS[t] && !BPOS[t] && clTeamOrder.indexOf(t) === -1)
+        clTeamOrder.push(t);
+    });
+    clParts.slice(1).forEach(function(block, bi) {
+      if (bi >= clTeamOrder.length) return;
+      var team = clTeamOrder[bi];
+      if (!lineups[team]) lineups[team] = [];
+      var tokens = block.split(/\s+/).filter(Boolean);
+      var ti = 0;
+      while (ti < tokens.length) {
+        var tok = tokens[ti];
+        if (SKIP_C[tok] || /^\d+-\d+$/.test(tok) || /^\.\d+$/.test(tok)) { ti++; continue; }
+        if (BPOS[tok]) {
+          var pos = tok; ti++;
+          var nameParts = [];
+          while (ti < tokens.length) {
+            var t2 = tokens[ti];
+            if ((t2 === 'L' || t2 === 'R' || t2 === 'S') && nameParts.length) {
+              var nm = nameParts.join(' ');
+              if (nm.length >= 3 && nm.length <= 35) {
+                lineups[team].push({pos:pos, name:nm, hand:t2});
+                found++;
+              }
+              ti++; break;
+            } else if (BPOS[t2] || SKIP_C[t2] || /^\d/.test(t2)) { break; }
+            else { nameParts.push(t2); ti++; }
+          }
+        } else { ti++; }
+      }
+    });
+
+  } else {
   // Detect format: if any line matches "POS Name Hand" it's Format A
   var isFormatA = rwLines.some(function(l){
     return /^(CF|LF|RF|SS|2B|3B|1B|DH|C|SP|RP|P)\s+.+\s+[LRS]$/.test(l);
@@ -2676,7 +2724,8 @@ function parseLineupPaste() {
         pendingPos = null;
       }
     });
-  }
+  } // end isFormatA/B
+  } // end isFormatC else
 
   if (!found || !Object.keys(lineups).length) {
     status.textContent = 'Could not parse — try copying just the lineups section, not the whole page.';
