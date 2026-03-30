@@ -1776,7 +1776,8 @@ function calcHitterWAR(off) {
 }
 
 
-function scoreGame(awayData, homeData, wx, park, ump) {
+function scoreGame(awayData, homeData, wx, park, ump, game) {
+  game = game || {}; // safe default
   var awySP  = awayData.pitcherStats;
   var homSP  = homeData.pitcherStats;
   var awyFI  = awayData.firstInnStats;
@@ -2156,7 +2157,8 @@ function buildGameFromAPI(g, wx) {
   var homeConfirmedLineup = parseAPILineup(homeLineupRaw);
 
   // Also check window.PARSED_LINEUPS (Rotowire paste) — takes priority if present
-  var pastedLineups = (typeof window !== 'undefined' && window.PARSED_LINEUPS) || {};
+  var pastedLineups = {};
+  try { if (typeof window !== 'undefined' && window.PARSED_LINEUPS) pastedLineups = window.PARSED_LINEUPS; } catch(e) {}
   if (pastedLineups[awayAbbr] && pastedLineups[awayAbbr].length >= 8) {
     awayConfirmedLineup = pastedLineups[awayAbbr].map(function(p, i) {
       return {name: p.name, pos: p.pos, order: i+1, hand: p.hand, source: 'paste'};
@@ -2296,7 +2298,7 @@ async function scoreAndAttach(game, umpMap, oddsMap) {
     bpStats: homeBP, recentLog: homeLog
   };
 
-  var scored = scoreGame(awayData, homeData, game.wx, game.park, ump);
+  var scored = scoreGame(awayData, homeData, game.wx, game.park, ump, game);
 
   // Attach real odds if available
   if (oddsMap) {
