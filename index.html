@@ -947,7 +947,7 @@ function calcMLEdge(modelScore, ml) {
 
 
 async function loadSchedule() {
-  var hydrate = 'team,venue,probablePitcher,linescore,game(content(summary))';
+  var hydrate = 'team,venue,probablePitcher,linescore,lineups,game(content(summary))';
   // Try regular season first, fall back to spring training if no games
   var regUrl = CFG.MLB_BASE + '/schedule?sportId=1&date=' + todayStr() + '&hydrate=' + hydrate + '&language=en';
   try {
@@ -1905,8 +1905,20 @@ function scoreGame(awayData, homeData, wx, park, ump) {
   var awFI_bb   = awyFI ? pct(awyFI.bbpct, 0.08, 0.04, false) : awySPp.bb9;
   var homFI_bb  = homFI ? pct(homFI.bbpct, 0.08, 0.04, false) : homSPp.bb9;
   // Top-3 suppression: high SP K% vs low offense OBP = NRFI friendly
-  var awySuppress = awySPp.k9 * 0.6 + (1 - awyOffp.ops) * 0.4; // away SP vs home top-3
-  var homSuppress = homSPp.k9 * 0.6 + (1 - homOffp.ops) * 0.4; // home SP vs away top-3
+  // If confirmed lineup available, use top-3 batters' quality instead of full team avg
+  // Top-of-order hitters are typically higher OBP — using full team avg understates risk
+  var getTop3Quality = function(lineup, fallbackOffP) {
+    if (!lineup || lineup.length < 3) return fallbackOffP.overall;
+    // Top 3 in lineup are the "hardest" batters — penalize NRFI more
+    // We don't have individual batter stats easily, but batting order position
+    // correlates with OBP — use a slight penalty vs full-team average
+    var lineupBoost = 0.03; // top-3 typically 3% better OBP than team avg
+    return Math.min(1.0, fallbackOffP.overall + lineupBoost);
+  };
+  var awyTop3q = getTop3Quality(game.awayLineup, awyOffp);
+  var homTop3q  = getTop3Quality(game.homeLineup, homOffp);
+  var awySuppress = awySPp.k9 * 0.6 + (1 - awyTop3q) * 0.4; // away SP vs home top-3
+  var homSuppress = homSPp.k9 * 0.6 + (1 - homTop3q) * 0.4;  // home SP vs away top-3
   var avgSuppress = (awySuppress + homSuppress) / 2;
   var parkNRFI  = pct(1/pfHR, 1.0, 0.15, true); // lower HR park = better NRFI
   var nrfiRaw = 0.30
@@ -2122,6 +2134,45 @@ function buildGameFromAPI(g, wx) {
     wxd.cond = wc===0?'Clear':wc<=3?'Partly Cloudy':wc<=48?'Foggy':wc<=67?'Rain':wc<=77?'Snow':wc<=82?'Showers':'Thunderstorm';
     if (park.roof==='Dome'||park.roof==='Retractable'){wxd.wind=0;wxd.dir='Dome';wxd.cond='Dome';}
   }
+  // Extract confirmed lineups from API if available
+  // g.lineups contains battingOrder arrays when lineups are posted (~90 min before game)
+  var parseAPILineup = function(teamLineup) {
+    if (!teamLineup || !teamLineup.length) return null;
+    return teamLineup.map(function(player) {
+      return {
+        id:   player.id,
+        name: (player.person && player.person.fullName) || player.fullName || '',
+        pos:  (player.position && player.position.abbreviation) || '',
+        order: player.battingOrder ? Math.floor(parseInt(player.battingOrder) / 100) : 0
+      };
+    }).filter(function(p) { return p.name && p.order > 0; })
+      .sort(function(a, b) { return a.order - b.order; });
+  };
+
+  var apiLineups = g.lineups || {};
+  var awayLineupRaw = apiLineups.awayPlayers || apiLineups.away || null;
+  var homeLineupRaw = apiLineups.homePlayers || apiLineups.home || null;
+  var awayConfirmedLineup = parseAPILineup(awayLineupRaw);
+  var homeConfirmedLineup = parseAPILineup(homeLineupRaw);
+
+  // Also check window.PARSED_LINEUPS (Rotowire paste) — takes priority if present
+  var pastedLineups = (typeof window !== 'undefined' && window.PARSED_LINEUPS) || {};
+  if (pastedLineups[awayAbbr] && pastedLineups[awayAbbr].length >= 8) {
+    awayConfirmedLineup = pastedLineups[awayAbbr].map(function(p, i) {
+      return {name: p.name, pos: p.pos, order: i+1, hand: p.hand, source: 'paste'};
+    });
+  }
+  if (pastedLineups[homeAbbr] && pastedLineups[homeAbbr].length >= 8) {
+    homeConfirmedLineup = pastedLineups[homeAbbr].map(function(p, i) {
+      return {name: p.name, pos: p.pos, order: i+1, hand: p.hand, source: 'paste'};
+    });
+  }
+
+  var lineupStatus = {
+    away: awayConfirmedLineup ? (awayConfirmedLineup[0] && awayConfirmedLineup[0].source === 'paste' ? 'pasted' : 'confirmed') : 'pending',
+    home: homeConfirmedLineup ? (homeConfirmedLineup[0] && homeConfirmedLineup[0].source === 'paste' ? 'pasted' : 'confirmed') : 'pending'
+  };
+
   // Return skeleton — scores populated later by scoreAndAttach()
   return {
     id: g.gamePk,
@@ -2130,6 +2181,9 @@ function buildGameFromAPI(g, wx) {
     awayPitcherId: awayPitcher.id, homePitcherId: homePitcher.id,
     awayP: awayPitcher.fullName||'TBD', awayH: KNOWN_LHP[awayPitcher.id] || 'R',
     homeP: homePitcher.fullName||'TBD', homeH: KNOWN_LHP[homePitcher.id] || 'R',
+    awayLineup: awayConfirmedLineup,
+    homeLineup: homeConfirmedLineup,
+    lineupStatus: lineupStatus,
     time: gameTime, venue: venue,
     total: 8.5, parkFactor: park.run, ump: 'TBD',
     wx: wxd, park: park,
@@ -2405,13 +2459,32 @@ async function loadBvPForGames(games) {
 
     if (!awayPitcherId && !homePitcherId) continue;
 
-    var awayBatters = awayTeamId ? await fetchRoster(awayTeamId) : [];
-    var homeBatters = homeTeamId ? await fetchRoster(homeTeamId) : [];
+    // Use confirmed lineup if available (API or paste), fall back to roster fetch
+    // Confirmed lineup gives us batting order so we target the real top-5 hitters
+    var getLineupBatters = async function(confirmedLineup, teamId) {
+      if (confirmedLineup && confirmedLineup.length >= 8) {
+        // Use confirmed lineup — filter out pitcher slot, take top 5 by batting order
+        return confirmedLineup
+          .filter(function(p) { return p.pos !== 'P' && p.pos !== 'SP'; })
+          .slice(0, 5)
+          .map(function(p) { return {id: p.id, name: p.name}; })
+          .filter(function(p) { return p.id; });
+      }
+      // Fall back to roster fetch
+      return teamId ? await fetchRoster(teamId) : [];
+    };
+
+    var awayBatters = await getLineupBatters(game.awayLineup, awayTeamId);
+    var homeBatters = await getLineupBatters(game.homeLineup, homeTeamId);
     await sleep(150);
+
+    // Flag whether we used confirmed lineup or fallback
+    var awayLineupConfirmed = game.awayLineup && game.awayLineup.length >= 8;
+    var homeLineupConfirmed = game.homeLineup && game.homeLineup.length >= 8;
 
     var bvpResults = [];
 
-    // Away batters vs home starter (top 5 hitters by roster order)
+    // Away batters vs home starter (top 5 in batting order)
     if (homePitcherId && awayBatters.length) {
       var top = awayBatters.slice(0, 5);
       for (var j = 0; j < top.length; j++) {
@@ -3114,11 +3187,11 @@ function renderCards() {
     card.innerHTML =
       '<div class="gc-h"><span class="gc-ti">'+g.time+'</span><span class="gc-ve">'+g.venue+'</span></div>'+
       '<div class="gc-tm">'+
-        '<div class="gc-t"><div class="gc-ab">'+g.away+'</div><div class="gc-p">'+g.awayP+'</div><div class="gc-hd">'+g.awayH+'</div></div>'+
+        '<div class="gc-t"><div class="gc-ab">'+g.away+'</div><div class="gc-p">'+g.awayP+'</div><div class="gc-hd">'+g.awayH+'</div>'+(g.lineupStatus&&g.lineupStatus.away==='confirmed'?'<div style="font-size:8px;color:var(--gn)">&#10003; Lineup</div>':g.lineupStatus&&g.lineupStatus.away==='pasted'?'<div style="font-size:8px;color:var(--am)">&#10003; Pasted</div>':'')+'</div>'+
         '<div class="gc-vs"><div style="font-family:var(--fm);font-size:9px;color:var(--mu)">TOTAL</div>'+
           '<div class="gc-tot" title="Click to override line" style="cursor:pointer" onclick="overrideLine(this,\''+g.id+'\')">'+(g.lineOverride||g.total)+(g.lineOverride?'*':'')+'</div>'+
           '<div style="font-family:var(--fm);font-size:9px;color:'+lmC+'">'+lmS+(g.lineMove.dir!=='FLAT'?' from '+g.lineMove.open:'')+'</div></div>'+
-        '<div class="gc-t"><div class="gc-ab">'+g.home+'</div><div class="gc-p">'+g.homeP+'</div><div class="gc-hd">'+g.homeH+'</div></div>'+
+        '<div class="gc-t"><div class="gc-ab">'+g.home+'</div><div class="gc-p">'+g.homeP+'</div><div class="gc-hd">'+g.homeH+'</div>'+(g.lineupStatus&&g.lineupStatus.home==='confirmed'?'<div style="font-size:8px;color:var(--gn)">&#10003; Lineup</div>':g.lineupStatus&&g.lineupStatus.home==='pasted'?'<div style="font-size:8px;color:var(--am)">&#10003; Pasted</div>':'')+'</div>'+
       '</div>'+
       '<div class="gc-fl">'+(flags||'')+'</div>'+
       '<div class="wx">'+
