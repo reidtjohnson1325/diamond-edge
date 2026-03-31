@@ -2748,7 +2748,9 @@ function parseLineupPaste() {
   }
 
   // Render parsed lineups
-  status.textContent = found + ' players parsed across ' + Object.keys(lineups).length + ' team(s)';
+  var totalNow = window.PARSED_LINEUPS ? Object.keys(window.PARSED_LINEUPS).length : Object.keys(lineups).length;
+  var newTeams = Object.keys(lineups).length;
+  status.textContent = found + ' players parsed (' + newTeams + ' teams) — ' + totalNow + ' total stored today';
   status.style.color = 'var(--gn)';
   results.style.display = 'block';
 
