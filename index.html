@@ -2771,6 +2771,8 @@ function parseLineupPaste() {
 
   // Store parsed lineups globally for use in scoring
   window.PARSED_LINEUPS = lineups;
+  // Save today's date so we know when to reset tomorrow
+  try { localStorage.setItem('diamond_lineup_date', new Date().toISOString().slice(0,10)); } catch(e) {}
 
   // Auto-rescore games that have lineup data
   var games = (typeof LIVE_GAMES !== 'undefined' && LIVE_GAMES.length) ? LIVE_GAMES : [];
@@ -3391,6 +3393,20 @@ function loadBets() {
   } catch(e) { BET_LOG = []; }
 }
 
+function resetLineupsIfNewDay() {
+  // Clear pasted lineups if they're from a previous day
+  try {
+    var storedDate = localStorage.getItem('diamond_lineup_date');
+    var today = new Date().toISOString().slice(0, 10); // "2026-03-31"
+    if (storedDate !== today) {
+      // New day — clear lineups
+      window.PARSED_LINEUPS = null;
+      localStorage.setItem('diamond_lineup_date', today);
+      console.log('[Lineups] New day detected — lineups cleared for', today);
+    }
+  } catch(e) {}
+}
+
 function calcPL(odds, units, result) {
   if (result === 'P') return 0;
   if (result === 'L') return -units;
@@ -3794,6 +3810,7 @@ function exportCSV() {
 
 function renderTracker() {
   loadBets();
+  resetLineupsIfNewDay();
   renderTodayPicker();
   renderBetLog();
   updateTrackerStats();
