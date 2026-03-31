@@ -947,7 +947,7 @@ function calcMLEdge(modelScore, ml) {
 
 
 async function loadSchedule() {
-  var hydrate = 'team,venue,probablePitcher,linescore,lineups,game(content(summary))';
+  var hydrate = 'team,venue,probablePitcher,linescore,lineup,players,game(content(summary))';
   // Try regular season first, fall back to spring training if no games
   var regUrl = CFG.MLB_BASE + '/schedule?sportId=1&date=' + todayStr() + '&hydrate=' + hydrate + '&language=en';
   try {
@@ -2139,22 +2139,52 @@ function buildGameFromAPI(g, wx) {
   // g.lineups contains battingOrder arrays when lineups are posted (~90 min before game)
   var parseAPILineup = function(teamLineup) {
     if (!teamLineup || !teamLineup.length) return null;
-    return teamLineup.map(function(player) {
+    var players = teamLineup.map(function(player) {
+      var person = player.person || player;
+      var order = player.battingOrder ? Math.floor(parseInt(player.battingOrder) / 100) : 0;
       return {
-        id:   player.id,
-        name: (player.person && player.person.fullName) || player.fullName || '',
-        pos:  (player.position && player.position.abbreviation) || '',
-        order: player.battingOrder ? Math.floor(parseInt(player.battingOrder) / 100) : 0
+        id:   person.id || player.id,
+        name: person.fullName || player.fullName || '',
+        pos:  (player.position && player.position.abbreviation) ||
+              (player.allPositions && player.allPositions[0] && player.allPositions[0].abbreviation) || '',
+        order: order
       };
     }).filter(function(p) { return p.name && p.order > 0; })
       .sort(function(a, b) { return a.order - b.order; });
+    return players.length ? players : null;
   };
 
+  // Try multiple response shapes — API returns lineup data in different places
   var apiLineups = g.lineups || {};
-  var awayLineupRaw = apiLineups.awayPlayers || apiLineups.away || null;
-  var homeLineupRaw = apiLineups.homePlayers || apiLineups.home || null;
+  var awayTeamData = (g.teams && g.teams.away) || {};
+  var homeTeamData = (g.teams && g.teams.home) || {};
+  var awayLineupRaw = apiLineups.awayPlayers || apiLineups.away ||
+                      awayTeamData.players || awayTeamData.lineup || null;
+  var homeLineupRaw = apiLineups.homePlayers || apiLineups.home ||
+                      homeTeamData.players || homeTeamData.lineup || null;
+  // Filter to only batters with batting order
+  if (awayLineupRaw && typeof awayLineupRaw === 'object' && !Array.isArray(awayLineupRaw)) {
+    awayLineupRaw = Object.values(awayLineupRaw).filter(function(p) { return p.battingOrder; });
+  }
+  if (homeLineupRaw && typeof homeLineupRaw === 'object' && !Array.isArray(homeLineupRaw)) {
+    homeLineupRaw = Object.values(homeLineupRaw).filter(function(p) { return p.battingOrder; });
+  }
   var awayConfirmedLineup = parseAPILineup(awayLineupRaw);
   var homeConfirmedLineup = parseAPILineup(homeLineupRaw);
+
+  // Lineup fetch logging — visible in DevTools Console
+  if (awayConfirmedLineup) {
+    console.log('[Lineup] API confirmed ' + awayAbbr + ': ' + awayConfirmedLineup.length + ' batters | ' +
+      awayConfirmedLineup.slice(0,3).map(function(p){return p.order+'. '+p.name;}).join(', ') + '...');
+  } else {
+    console.log('[Lineup] API pending for ' + awayAbbr + ' — raw data:', awayLineupRaw ? JSON.stringify(awayLineupRaw).substring(0,100) : 'null');
+  }
+  if (homeConfirmedLineup) {
+    console.log('[Lineup] API confirmed ' + homeAbbr + ': ' + homeConfirmedLineup.length + ' batters | ' +
+      homeConfirmedLineup.slice(0,3).map(function(p){return p.order+'. '+p.name;}).join(', ') + '...');
+  } else {
+    console.log('[Lineup] API pending for ' + homeAbbr + ' — raw data:', homeLineupRaw ? JSON.stringify(homeLineupRaw).substring(0,100) : 'null');
+  }
 
   // Also check window.PARSED_LINEUPS (Rotowire paste) — takes priority if present
   var pastedLineups = {};
@@ -2782,6 +2812,41 @@ function parseLineupPaste() {
 
   // Store parsed lineups globally for use in scoring
   window.PARSED_LINEUPS = lineups;
+
+  // Auto-rescore all games with confirmed lineup data
+  // This updates BvP and NRFI top-of-order immediately after paste
+  var games = (typeof LIVE_GAMES !== 'undefined' && LIVE_GAMES.length) ? LIVE_GAMES : [];
+  if (games.length && typeof UMP_MAP !== 'undefined') {
+    status.textContent = found + ' players parsed — rescoring games...';
+    var rescorePromises = games.filter(function(g) {
+      // Only rescore games where we have lineup data for at least one team
+      return lineups[g.away] || lineups[g.home];
+    }).map(function(g) {
+      // Update the game's lineup data from paste
+      if (lineups[g.away]) {
+        g.awayLineup = lineups[g.away].map(function(p, i) {
+          return {name: p.name, pos: p.pos, order: i+1, hand: p.hand, source: 'paste'};
+        });
+        g.lineupStatus = g.lineupStatus || {};
+        g.lineupStatus.away = 'pasted';
+      }
+      if (lineups[g.home]) {
+        g.homeLineup = lineups[g.home].map(function(p, i) {
+          return {name: p.name, pos: p.pos, order: i+1, hand: p.hand, source: 'paste'};
+        });
+        g.lineupStatus = g.lineupStatus || {};
+        g.lineupStatus.home = 'pasted';
+      }
+      return scoreAndAttach(g, UMP_MAP, CFG.ODDS_CACHE || {}).catch(function(e) {
+        console.warn('Rescore failed:', g.away, '@', g.home, e.message);
+        return g;
+      });
+    });
+    Promise.all(rescorePromises).then(function() {
+      renderAll();
+      status.textContent = found + ' players parsed — scores updated';
+    });
+  }
 }
 
 function clearLineupPaste() {
