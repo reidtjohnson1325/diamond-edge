@@ -947,7 +947,7 @@ function calcMLEdge(modelScore, ml) {
 
 
 async function loadSchedule() {
-  var hydrate = 'team,venue,probablePitcher,linescore,lineup,players,game(content(summary))';
+  var hydrate = 'team,venue,probablePitcher,linescore,lineups,game(content(summary))';
   // Try regular season first, fall back to spring training if no games
   var regUrl = CFG.MLB_BASE + '/schedule?sportId=1&date=' + todayStr() + '&hydrate=' + hydrate + '&language=en';
   try {
@@ -1176,9 +1176,17 @@ async function fetchPitcherStats(personId) {
 
 // [duplicate fetchRecentGameLog removed — see scoring engine section]
 
+var WX_CACHE = {};
+var WX_CACHE_TIME = {};
+var WX_CACHE_TTL = 20 * 60 * 1000; // 20 min — prevents 429 on refresh
+
 function loadWeather(venue) {
   var coords = STADIUM_COORDS[venue];
   if (!coords) return Promise.resolve(null);
+  var now = Date.now();
+  if (WX_CACHE[venue] && (now - WX_CACHE_TIME[venue]) < WX_CACHE_TTL) {
+    return Promise.resolve(WX_CACHE[venue]);
+  }
   var url = CFG.WX_BASE +
     '?latitude=' + coords.lat +
     '&longitude=' + coords.lon +
@@ -1186,7 +1194,11 @@ function loadWeather(venue) {
     '&wind_speed_unit=mph' +
     '&temperature_unit=fahrenheit' +
     '&timezone=auto';
-  return fetchJSON(url).catch(function() { return null; });
+  return fetchJSON(url).then(function(data) {
+    WX_CACHE[venue] = data;
+    WX_CACHE_TIME[venue] = Date.now();
+    return data;
+  }).catch(function() { return WX_CACHE[venue] || null; });
 }
 
 // ── PERCENTILE + SCORING ENGINE ─────────────────────────────────
@@ -2139,52 +2151,22 @@ function buildGameFromAPI(g, wx) {
   // g.lineups contains battingOrder arrays when lineups are posted (~90 min before game)
   var parseAPILineup = function(teamLineup) {
     if (!teamLineup || !teamLineup.length) return null;
-    var players = teamLineup.map(function(player) {
-      var person = player.person || player;
-      var order = player.battingOrder ? Math.floor(parseInt(player.battingOrder) / 100) : 0;
+    return teamLineup.map(function(player) {
       return {
-        id:   person.id || player.id,
-        name: person.fullName || player.fullName || '',
-        pos:  (player.position && player.position.abbreviation) ||
-              (player.allPositions && player.allPositions[0] && player.allPositions[0].abbreviation) || '',
-        order: order
+        id:   player.id,
+        name: (player.person && player.person.fullName) || player.fullName || '',
+        pos:  (player.position && player.position.abbreviation) || '',
+        order: player.battingOrder ? Math.floor(parseInt(player.battingOrder) / 100) : 0
       };
     }).filter(function(p) { return p.name && p.order > 0; })
       .sort(function(a, b) { return a.order - b.order; });
-    return players.length ? players : null;
   };
 
-  // Try multiple response shapes — API returns lineup data in different places
   var apiLineups = g.lineups || {};
-  var awayTeamData = (g.teams && g.teams.away) || {};
-  var homeTeamData = (g.teams && g.teams.home) || {};
-  var awayLineupRaw = apiLineups.awayPlayers || apiLineups.away ||
-                      awayTeamData.players || awayTeamData.lineup || null;
-  var homeLineupRaw = apiLineups.homePlayers || apiLineups.home ||
-                      homeTeamData.players || homeTeamData.lineup || null;
-  // Filter to only batters with batting order
-  if (awayLineupRaw && typeof awayLineupRaw === 'object' && !Array.isArray(awayLineupRaw)) {
-    awayLineupRaw = Object.values(awayLineupRaw).filter(function(p) { return p.battingOrder; });
-  }
-  if (homeLineupRaw && typeof homeLineupRaw === 'object' && !Array.isArray(homeLineupRaw)) {
-    homeLineupRaw = Object.values(homeLineupRaw).filter(function(p) { return p.battingOrder; });
-  }
+  var awayLineupRaw = apiLineups.awayPlayers || apiLineups.away || null;
+  var homeLineupRaw = apiLineups.homePlayers || apiLineups.home || null;
   var awayConfirmedLineup = parseAPILineup(awayLineupRaw);
   var homeConfirmedLineup = parseAPILineup(homeLineupRaw);
-
-  // Lineup fetch logging — visible in DevTools Console
-  if (awayConfirmedLineup) {
-    console.log('[Lineup] API confirmed ' + awayAbbr + ': ' + awayConfirmedLineup.length + ' batters | ' +
-      awayConfirmedLineup.slice(0,3).map(function(p){return p.order+'. '+p.name;}).join(', ') + '...');
-  } else {
-    console.log('[Lineup] API pending for ' + awayAbbr + ' — raw data:', awayLineupRaw ? JSON.stringify(awayLineupRaw).substring(0,100) : 'null');
-  }
-  if (homeConfirmedLineup) {
-    console.log('[Lineup] API confirmed ' + homeAbbr + ': ' + homeConfirmedLineup.length + ' batters | ' +
-      homeConfirmedLineup.slice(0,3).map(function(p){return p.order+'. '+p.name;}).join(', ') + '...');
-  } else {
-    console.log('[Lineup] API pending for ' + homeAbbr + ' — raw data:', homeLineupRaw ? JSON.stringify(homeLineupRaw).substring(0,100) : 'null');
-  }
 
   // Also check window.PARSED_LINEUPS (Rotowire paste) — takes priority if present
   var pastedLineups = {};
@@ -2689,100 +2671,77 @@ function parseLineupPaste() {
   var lineups = {};
   var found = 0;
 
-  // ── Rotowire lineup parser ───────────────────────────────────────
-  // Handles Rotowire copy-paste from daily-lineups.php
-  // Format: two-column page copies as interleaved lines
-  // Team abbrs at top (WSH/WSH/PHI/PHI due to logo+header),
-  // two "Confirmed Lineup" lines back-to-back,
-  // then team 1 players, then "Home Run Odds"/"Starting Pitcher Intel" separator,
-  // then team 2 players
+  // ── Rotowire full-page lineup parser ────────────────────────────
+  // Paste the ENTIRE Rotowire page — handles all games at once
+  // Strategy: split on game-start time markers (6:40 PM ET etc.)
+  // Each chunk = one game block, parsed independently for 2 teams
   var MLB_ABBRS_P = {WSH:1,PHI:1,NYY:1,NYM:1,BOS:1,TOR:1,TB:1,BAL:1,CLE:1,DET:1,
     KC:1,MIN:1,CWS:1,HOU:1,LAA:1,OAK:1,SEA:1,TEX:1,ATL:1,MIA:1,CHC:1,CIN:1,
     MIL:1,PIT:1,STL:1,ARI:1,COL:1,LAD:1,SD:1,SF:1,ATH:1,SDP:1};
   var BPOS_P = {CF:1,LF:1,RF:1,SS:1,'2B':1,'3B':1,'1B':1,C:1,DH:1,SP:1,RP:1,P:1};
+  var LM_RE = /Confirmed Lineup|Expected Lineup|Projected Lineup/;
+  var SEP_RE = /Home Run Odds|Starting Pitcher Intel/;
+  var JUNK_RE = /^\d+-\d+|ERA|Watch Now|Tickets|Alerts|Umpire|Precipitation|LINE\b|O\/U|Runs$|Betting/;
+  var GAME_START_RE = /^\d+:\d+\s+[AP]M/;
 
-  var rwLines = raw.split(/\n/).map(function(l){ return l.trim().replace(/^[*\u2022]+\s*/,''); }).filter(Boolean);
+  var rwLines = raw.split(/\n/).map(function(l){
+    return l.trim().replace(/^[*\u2022\u00B7]+\s*/,'');
+  }).filter(Boolean);
 
-  // Collect unique team abbreviations in order from top of paste
-  var teamOrder = [];
-  rwLines.slice(0, Math.min(15, rwLines.length)).forEach(function(line) {
-    if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS_P[line] && !BPOS_P[line] && teamOrder.indexOf(line) === -1)
-      teamOrder.push(line);
-  });
+  // Helper: parse a single game block (contains exactly 2 teams)
+  var parseGameBlock = function(blockLines) {
+    var teams = [];
+    blockLines.forEach(function(l) {
+      if (/^[A-Z]{2,3}$/.test(l) && MLB_ABBRS_P[l] && !BPOS_P[l]) {
+        if (!teams.length || teams[teams.length-1] !== l) teams.push(l);
+      }
+    });
+    if (teams.length < 2) return {};
+    var res = {}, tIdx = 0, inLU = false, clCnt = 0;
+    blockLines.forEach(function(line) {
+      if (LM_RE.test(line)) {
+        clCnt++; if (clCnt === 1) inLU = true; return;
+      } else { clCnt = 0; }
+      if (SEP_RE.test(line)) { if (inLU && tIdx+1 < teams.length) tIdx++; return; }
+      if (!inLU || tIdx >= teams.length) return;
+      if (JUNK_RE.test(line)) return;
+      if (/^[A-Z][a-z].*\(\d+-\d+\)/.test(line)) return;
+      if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS_P[line] && !BPOS_P[line]) return;
+      var m = line.match(/^(CF|LF|RF|SS|2B|3B|1B|DH|C|SP|RP|P)\s+(.+?)\s+([LRS])$/);
+      if (m) {
+        var nm = m[2].replace(/\s+/g,' ').trim();
+        if (nm.length >= 3 && nm.length <= 35) {
+          var t = teams[tIdx];
+          if (!res[t]) res[t] = [];
+          if (res[t].length < 9) { res[t].push({pos:m[1],name:nm,hand:m[3]}); found++; }
+        }
+      }
+    });
+    return res;
+  };
 
-  // Parse: "Home Run Odds" or "Starting Pitcher Intel" separates team 1 from team 2
-  // "Confirmed Lineup" (may appear twice back-to-back) starts lineup parsing
-  var teamIdx = 0;
-  var inLineup = false;
-
+  // Split full page into per-game blocks on time markers (6:40 PM ET, 7:05 PM ET etc.)
+  var gameBlocks = [];
+  var curBlock = [];
   rwLines.forEach(function(line) {
-    // Team separator — advance to next team
-    if (line.indexOf('Home Run Odds') !== -1 || line.indexOf('Starting Pitcher Intel') !== -1) {
-      if (inLineup && teamIdx < teamOrder.length - 1) teamIdx++;
-      return;
+    if (GAME_START_RE.test(line) && curBlock.length > 0) {
+      gameBlocks.push(curBlock);
+      curBlock = [];
     }
-    // Lineup start marker
-    if (line.indexOf('Confirmed Lineup') !== -1 || line.indexOf('Expected Lineup') !== -1 || line.indexOf('Projected Lineup') !== -1) {
-      inLineup = true;
-      return;
-    }
-    if (!inLineup) return;
-    // Skip junk lines
-    if (/^\d+-\d+/.test(line) || line.indexOf('ERA') !== -1) return;
-    if (/^[A-Z][a-z].*\(\d+-\d+\)/.test(line)) return;
-    if (/^[A-Z]{2,3}$/.test(line) && MLB_ABBRS_P[line] && !BPOS_P[line]) return;
-    if (teamIdx >= teamOrder.length) return;
-
-    // Player line: "RF James Wood L" or "1B Bryce Harper L"
-    var m = line.match(/^(CF|LF|RF|SS|2B|3B|1B|DH|C|SP|RP|P)\s+(.+?)\s+([LRS])$/);
-    if (m) {
-      var name = m[2].replace(/\s+/g,' ').trim();
-      if (name.length >= 3 && name.length <= 35) {
-        var team = teamOrder[teamIdx];
-        if (!lineups[team]) lineups[team] = [];
-        lineups[team].push({pos: m[1], name: name, hand: m[3]});
-        found++;
-      }
-    }
+    curBlock.push(line);
   });
+  if (curBlock.length) gameBlocks.push(curBlock);
 
-  // Fallback: if teamOrder empty or nothing found, try Format C (space-collapsed)
-  if (found === 0 && raw.indexOf('Confirmed Lineup') !== -1) {
-    var clParts = raw.split('Confirmed Lineup');
-    var fbTeamOrder = [];
-    clParts[0].split(/\s+/).forEach(function(t) {
-      if (/^[A-Z]{2,3}$/.test(t) && MLB_ABBRS_P[t] && !BPOS_P[t] && fbTeamOrder.indexOf(t) === -1)
-        fbTeamOrder.push(t);
+  // Parse each game block and merge results
+  gameBlocks.forEach(function(block) {
+    var res = parseGameBlock(block);
+    Object.keys(res).forEach(function(team) {
+      if (!lineups[team]) lineups[team] = res[team];
     });
-    var SKIP_FB = {Home:1,Run:1,Odds:1,Starting:1,Pitcher:1,Intel:1,Watch:1,Now:1,Tickets:1,Alerts:1,ERA:1};
-    clParts.slice(1).forEach(function(block, bi) {
-      if (bi >= fbTeamOrder.length) return;
-      var team = fbTeamOrder[bi];
-      if (!lineups[team]) lineups[team] = [];
-      var tokens = block.split(/\s+/).filter(Boolean);
-      var ti = 0;
-      while (ti < tokens.length) {
-        var tok = tokens[ti];
-        if (SKIP_FB[tok] || /^\d+-\d+$/.test(tok)) { ti++; continue; }
-        if (BPOS_P[tok]) {
-          var pos = tok; ti++;
-          var np = [];
-          while (ti < tokens.length) {
-            var t2 = tokens[ti];
-            if ((t2==='L'||t2==='R'||t2==='S') && np.length) {
-              var nm = np.join(' ');
-              if (nm.length >= 3 && nm.length <= 35) { lineups[team].push({pos:pos,name:nm,hand:t2}); found++; }
-              ti++; break;
-            } else if (BPOS_P[t2] || SKIP_FB[t2] || /^\d/.test(t2)) { break; }
-            else { np.push(t2); ti++; }
-          }
-        } else { ti++; }
-      }
-    });
-  }
+  });
 
   if (!found || !Object.keys(lineups).length) {
-    status.textContent = 'Could not parse — try copying just the lineups section, not the whole page.';
+    status.textContent = 'Could not parse — make sure you copied from rotowire.com/baseball/daily-lineups.php';
     status.style.color = 'var(--rd)';
     results.style.display = 'none';
     return;
@@ -2813,27 +2772,20 @@ function parseLineupPaste() {
   // Store parsed lineups globally for use in scoring
   window.PARSED_LINEUPS = lineups;
 
-  // Auto-rescore all games with confirmed lineup data
-  // This updates BvP and NRFI top-of-order immediately after paste
+  // Auto-rescore games that have lineup data
   var games = (typeof LIVE_GAMES !== 'undefined' && LIVE_GAMES.length) ? LIVE_GAMES : [];
   if (games.length && typeof UMP_MAP !== 'undefined') {
-    status.textContent = found + ' players parsed — rescoring games...';
+    status.textContent = found + ' players parsed — rescoring...';
     var rescorePromises = games.filter(function(g) {
-      // Only rescore games where we have lineup data for at least one team
       return lineups[g.away] || lineups[g.home];
     }).map(function(g) {
-      // Update the game's lineup data from paste
       if (lineups[g.away]) {
-        g.awayLineup = lineups[g.away].map(function(p, i) {
-          return {name: p.name, pos: p.pos, order: i+1, hand: p.hand, source: 'paste'};
-        });
+        g.awayLineup = lineups[g.away].map(function(p,i){ return {name:p.name,pos:p.pos,order:i+1,hand:p.hand,source:'paste'}; });
         g.lineupStatus = g.lineupStatus || {};
         g.lineupStatus.away = 'pasted';
       }
       if (lineups[g.home]) {
-        g.homeLineup = lineups[g.home].map(function(p, i) {
-          return {name: p.name, pos: p.pos, order: i+1, hand: p.hand, source: 'paste'};
-        });
+        g.homeLineup = lineups[g.home].map(function(p,i){ return {name:p.name,pos:p.pos,order:i+1,hand:p.hand,source:'paste'}; });
         g.lineupStatus = g.lineupStatus || {};
         g.lineupStatus.home = 'pasted';
       }
@@ -2844,7 +2796,7 @@ function parseLineupPaste() {
     });
     Promise.all(rescorePromises).then(function() {
       renderAll();
-      status.textContent = found + ' players parsed — scores updated';
+      status.textContent = found + ' players parsed across ' + Object.keys(lineups).length + ' team(s) — scores updated';
     });
   }
 }
