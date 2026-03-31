@@ -1973,11 +1973,17 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var koSpName  = (awySPp.k9 >= homSPp.k9) ? awayData.pitcher : homeData.pitcher;
   var expIP     = spForKO ? Math.min(7.0, spForKO.inningsPitched / Math.max(1,Math.round(spForKO.inningsPitched/6))) : 5.5;
   var expIPp    = pct(expIP, 5.5, 0.8, true);
-  var koRaw = spForKOp.k9 * 0.32
-    + oppKpct * 0.26
-    + expIPp * 0.20
-    + pct(soFactor, 1.0, 0.08, true) * 0.10
-    + pct(ump.kAdj, 0, 0.8, true) * 0.12;
+  // KO score: built from deviation from neutral (0.50)
+  // Each factor pushes score above or below 0.50
+  // spForKOp.k9, oppKpct, expIPp are all 0-1 percentiles
+  // A great K pitcher (0.80 pct) contributes +0.30*0.32 = +0.096 above neutral
+  // An avg pitcher (0.50) contributes 0 — no edge
+  var koRaw = 0.50
+    + (spForKOp.k9  - 0.50) * 0.32   // SP K rate vs league avg
+    + (oppKpct      - 0.50) * 0.26   // Opp K% (high = more Ks for pitcher)
+    + (expIPp       - 0.50) * 0.20   // Expected IP (more IP = more Ks)
+    + (pct(soFactor, 1.0, 0.08, true) - 0.50) * 0.10  // Park SO factor
+    + (pct(ump.kAdj, 0, 0.35, true)   - 0.50) * 0.12; // Ump K zone
   koRaw = Math.max(0.20, Math.min(0.88, koRaw));
   var koScore = Math.round(koRaw * 100);
   koScore = Math.min(92, Math.max(25, koScore));
