@@ -2769,8 +2769,14 @@ function parseLineupPaste() {
   });
   results.innerHTML = html;
 
-  // Store parsed lineups globally for use in scoring
-  window.PARSED_LINEUPS = lineups;
+  // MERGE into existing lineups — don't wipe early games when pasting late games
+  // Only add/update teams that appear in this paste, leave others untouched
+  if (!window.PARSED_LINEUPS) window.PARSED_LINEUPS = {};
+  Object.keys(lineups).forEach(function(team) {
+    window.PARSED_LINEUPS[team] = lineups[team];
+  });
+  var totalTeams = Object.keys(window.PARSED_LINEUPS).length;
+  console.log('[Lineups] Merged ' + Object.keys(lineups).length + ' teams — total stored: ' + totalTeams);
   // Save today's date so we know when to reset tomorrow
   try { localStorage.setItem('diamond_lineup_date', new Date().toISOString().slice(0,10)); } catch(e) {}
 
@@ -2798,7 +2804,8 @@ function parseLineupPaste() {
     });
     Promise.all(rescorePromises).then(function() {
       renderAll();
-      status.textContent = found + ' players parsed across ' + Object.keys(lineups).length + ' team(s) — scores updated';
+      var totalStored = window.PARSED_LINEUPS ? Object.keys(window.PARSED_LINEUPS).length : 0;
+    status.textContent = found + ' players parsed (' + Object.keys(lineups).length + ' teams) — ' + totalStored + ' total teams stored';
     });
   }
 }
