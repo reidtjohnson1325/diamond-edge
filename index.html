@@ -93,7 +93,7 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
 .mm{font-family:var(--fm);font-size:9px;color:var(--mu);margin-top:1px}
 .pl{display:inline-block;font-family:var(--fm);font-size:9px;font-weight:500;letter-spacing:.07em;padding:2px 7px;border-radius:3px;text-transform:uppercase;white-space:nowrap}
 .p-ml{background:var(--bld);color:var(--bl)}.p-ou{background:var(--pud);color:var(--pu)}
-.p-nrfi{background:var(--tld);color:var(--tl)}.p-yrfi{background:rgba(251,113,133,.15);color:#fb7185}.p-ko{background:var(--amd);color:var(--am)}
+.p-nrfi{background:var(--tld);color:var(--tl)}.p-yrfi{background:rgba(251,113,133,.15);color:#fb7185}.p-rl{background:rgba(139,92,246,.15);color:#8b5cf6}.p-ko{background:var(--amd);color:var(--am)}
 .sb2{display:flex;align-items:center;gap:7px}
 .sb2-bg{width:68px;height:4px;background:var(--sf2);border-radius:2px;overflow:hidden;flex-shrink:0}
 .sb2-f{height:100%;border-radius:2px}
@@ -3464,7 +3464,14 @@ function renderTodayPicker() {
     var lineInputHtml = hasLine
       ? '<input class="tpr-line-input show" placeholder="'+linePH+'" style="width:80px" />'
       : '';
+    // ML plays get a Run Line -1.5 toggle
+    var rlToggle = p.type === 'ML'
+      ? '<label style="display:inline-flex;align-items:center;gap:3px;font-family:var(--fm);font-size:9px;color:var(--mu);cursor:pointer;margin-right:2px;white-space:nowrap">'
+        + '<input type="checkbox" class="tpr-rl-toggle" style="width:11px;height:11px;cursor:pointer" />'
+        + 'RL -1.5</label>'
+      : '';
     var inputHtml = loggedBadge +
+      rlToggle +
       lineInputHtml +
       '<input class="tpr-odds-input show" placeholder="Odds (-115)" style="width:80px" />' +
       '<input class="tpr-units-input show" placeholder="Units" value="1" style="width:52px" />' +
@@ -3501,6 +3508,9 @@ function renderTodayPicker() {
         var lineVal = lineEl  ? lineEl.value.trim()          : '';
         var oddsVal = oddsEl  ? oddsEl.value.trim()          : '';
         var units   = unitsEl ? parseFloat(unitsEl.value)||1 : 1;
+        // Check if Run Line toggle is on — convert ML to RL -1.5
+        var rlToggle = theRow.querySelector('.tpr-rl-toggle');
+        var isRunLine = rlToggle && rlToggle.checked;
         // Odds required for all bet types
         if (!oddsVal) {
           if (oddsEl) {
@@ -3520,10 +3530,19 @@ function renderTodayPicker() {
         // Build display line — "7.5 @ -115" or "NYY ML @ -130"
         var line = lineVal ? lineVal + ' @ ' + oddsVal : oddsVal;
         var todayStr = new Date().toISOString().slice(0,10);
+        // If Run Line toggle is on, convert the play
+        var logType = type;
+        var logPlay = play;
+        if (isRunLine) {
+          logType = 'RL';
+          // Convert "NYY ML" → "NYY -1.5"
+          logPlay = play.replace(/\s+ML$/, ' -1.5').replace(/\s+ml$/, ' -1.5');
+          if (logPlay === play) logPlay = play + ' -1.5'; // fallback
+        }
         // Use unique ID so same play can be logged multiple times at different lines
         BET_LOG.push({
           id: Date.now(), playId: pid + '_' + Date.now(), date: todayStr,
-          matchup: match, type: type, play: play,
+          matchup: match, type: logType, play: logPlay,
           line: lineVal || null,
           odds: oddsVal, units: units, score: score, conf: conf,
           result: '', pl: null
@@ -3619,7 +3638,7 @@ function renderBetLog() {
   sorted.forEach(function(bet) {
     var plVal = bet.pl !== null ? bet.pl : (bet.result ? calcPL(bet.odds, bet.units, bet.result) : null);
     var cc        = bet.conf === 'STRONG' ? 'cs' : bet.conf === 'LEAN' ? 'cl' : 'cx';
-    var typeClass = {ML:'p-ml','O/U':'p-ou',NRFI:'p-nrfi',KO:'p-ko'}[bet.type] || 'p-ml';
+    var typeClass = {ML:'p-ml','O/U':'p-ou',NRFI:'p-nrfi',KO:'p-ko',RL:'p-rl',YRFI:'p-yrfi'}[bet.type] || 'p-ml';
     var tr = document.createElement('tr');
     function td(content, style) {
       var cell = document.createElement('td');
