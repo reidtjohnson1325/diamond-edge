@@ -576,36 +576,37 @@ var STADIUM_COORDS = {
 // ALL 30 PARK FACTORS
 // ═══════════════════════════════════════════════
 var PARKS = [
+  // Updated with 2025 actuals — sources: FanGraphs 5yr, Baseball Savant Statcast park factors
   {stadium:'Coors Field',team:'COL',run:1.38,hr:1.44,hits:1.28,so:0.88,roof:'Open',windSens:3,lf:347,cf:415,rf:350,elev:5200,turf:'Grass',windDir:225,note:'Altitude inflates all offense dramatically'},
-  {stadium:'Citizens Bank Park',team:'PHI',run:1.09,hr:1.12,hits:1.06,so:0.96,roof:'Open',windSens:2,lf:329,cf:401,rf:330,elev:20,turf:'Grass',windDir:20,note:'Short RF porch; friendly to LHH power'},
-  {stadium:'Yankee Stadium',team:'NYY',run:1.06,hr:1.14,hits:1.03,so:0.97,roof:'Open',windSens:2,lf:318,cf:408,rf:314,elev:55,turf:'Grass',windDir:20,note:'Short RF porch boosts HR especially LHH'},
-  {stadium:'Great American Ball Park',team:'CIN',run:1.07,hr:1.13,hits:1.04,so:0.95,roof:'Open',windSens:2,lf:328,cf:404,rf:325,elev:550,turf:'Grass',windDir:340,note:'River-facing; HR-friendly especially RHH'},
-  {stadium:'Fenway Park',team:'BOS',run:1.04,hr:1.08,hits:1.07,so:0.98,roof:'Open',windSens:2,lf:310,cf:420,rf:302,elev:21,turf:'Grass',windDir:10,note:'Green Monster converts HRs to doubles'},
+  {stadium:'Great American Ball Park',team:'CIN',run:1.11,hr:1.16,hits:1.05,so:0.95,roof:'Open',windSens:2,lf:328,cf:404,rf:325,elev:550,turf:'Grass',windDir:340,note:'Consistently one of top HR parks; river humidity helps'},
+  {stadium:'Citizens Bank Park',team:'PHI',run:1.08,hr:1.13,hits:1.05,so:0.96,roof:'Open',windSens:2,lf:329,cf:401,rf:330,elev:20,turf:'Grass',windDir:20,note:'Short RF porch; friendly to LHH power'},
+  {stadium:'Yankee Stadium',team:'NYY',run:1.07,hr:1.16,hits:1.03,so:0.97,roof:'Open',windSens:2,lf:318,cf:408,rf:314,elev:55,turf:'Grass',windDir:20,note:'Short RF porch boosts HR especially LHH'},
+  {stadium:'PNC Park',team:'PIT',run:1.06,hr:1.02,hits:1.04,so:0.97,roof:'Open',windSens:2,lf:325,cf:399,rf:320,elev:730,turf:'Grass',windDir:15,note:'Joined 5pct+ hitter friendly group in 2025'},
+  {stadium:'Kauffman Stadium',team:'KC',run:1.05,hr:1.00,hits:1.04,so:0.98,roof:'Open',windSens:3,lf:330,cf:410,rf:330,elev:750,turf:'Grass',windDir:5,note:'Moved up significantly in 2024-25; warmer summers'},
+  {stadium:'Fenway Park',team:'BOS',run:1.04,hr:1.06,hits:1.08,so:0.98,roof:'Open',windSens:2,lf:310,cf:420,rf:302,elev:21,turf:'Grass',windDir:10,note:'Green Monster converts HRs to doubles; high hits'},
   {stadium:'Truist Park',team:'ATL',run:1.03,hr:1.05,hits:1.02,so:0.99,roof:'Open',windSens:1,lf:335,cf:400,rf:325,elev:1050,turf:'Grass',windDir:15,note:'Warm climate; slight hitter advantage'},
-  {stadium:'Camden Yards',team:'BAL',run:1.02,hr:1.05,hits:1.02,so:0.98,roof:'Open',windSens:2,lf:333,cf:400,rf:318,elev:21,turf:'Grass',windDir:355,note:'Short RF; classic HR-friendly ballpark'},
-  {stadium:'Wrigley Field',team:'CHC',run:1.02,hr:1.04,hits:1.03,so:0.97,roof:'Open',windSens:4,lf:355,cf:400,rf:353,elev:595,turf:'Grass',windDir:45,note:'Wind swings run total up to 15 pct either way'},
-  {stadium:'Chase Field',team:'ARI',run:1.02,hr:1.03,hits:1.02,so:0.98,roof:'Retractable',windSens:1,lf:330,cf:407,rf:334,elev:1090,turf:'Grass',windDir:0,note:'Dome when hot; plays larger than dimensions'},
+  {stadium:'Camden Yards',team:'BAL',run:1.04,hr:1.09,hits:1.03,so:0.97,roof:'Open',windSens:2,lf:333,cf:400,rf:318,elev:21,turf:'Grass',windDir:355,note:'Walls moved in 2025 — now more HR friendly'},
+  {stadium:'Chase Field',team:'ARI',run:1.02,hr:1.03,hits:1.02,so:0.98,roof:'Retractable',windSens:1,lf:330,cf:407,rf:334,elev:1090,turf:'Grass',windDir:0,note:'Dome when hot; altitude adds run factor when open'},
   {stadium:'Rogers Centre',team:'TOR',run:1.01,hr:1.02,hits:1.01,so:0.99,roof:'Retractable',windSens:0,lf:328,cf:400,rf:328,elev:300,turf:'Turf',windDir:0,note:'Turf speeds up grounders; dome-neutral'},
   {stadium:'Busch Stadium',team:'STL',run:1.00,hr:0.98,hits:1.01,so:1.00,roof:'Open',windSens:2,lf:336,cf:400,rf:335,elev:465,turf:'Grass',windDir:340,note:'Fairly neutral; slightly pitcher-friendly'},
-  {stadium:'Kauffman Stadium',team:'KC',run:1.00,hr:0.97,hits:1.01,so:1.00,roof:'Open',windSens:3,lf:330,cf:410,rf:330,elev:750,turf:'Grass',windDir:5,note:'Large foul territory; SW wind in summer'},
-  {stadium:'Globe Life Field',team:'TEX',run:0.98,hr:0.96,hits:1.00,so:1.01,roof:'Retractable',windSens:0,lf:329,cf:407,rf:326,elev:551,turf:'Grass',windDir:0,note:'Climate-controlled dome; consistent all season'},
+  {stadium:'Globe Life Field',team:'TEX',run:0.99,hr:0.97,hits:1.00,so:1.01,roof:'Retractable',windSens:0,lf:329,cf:407,rf:326,elev:551,turf:'Grass',windDir:0,note:'Climate-controlled; fell out of top hitter parks'},
   {stadium:'Guaranteed Rate Field',team:'CWS',run:0.98,hr:1.00,hits:0.99,so:1.00,roof:'Open',windSens:2,lf:330,cf:400,rf:335,elev:595,turf:'Grass',windDir:20,note:'Lake winds unpredictable in April and May'},
   {stadium:'Angel Stadium',team:'LAA',run:0.99,hr:1.00,hits:1.00,so:1.00,roof:'Open',windSens:1,lf:347,cf:396,rf:350,elev:160,turf:'Grass',windDir:315,note:'True neutral park; no consistent edge'},
-  {stadium:'Nationals Park',team:'WSH',run:0.99,hr:1.00,hits:1.00,so:1.00,roof:'Open',windSens:2,lf:336,cf:402,rf:335,elev:10,turf:'Grass',windDir:340,note:'Fairly neutral; slight pitcher lean cool nights'},
-  {stadium:'Target Field',team:'MIN',run:0.97,hr:0.95,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:339,cf:411,rf:328,elev:830,turf:'Grass',windDir:25,note:'Cold springs; heats up mid-summer'},
+  {stadium:'Nationals Park',team:'WSH',run:0.98,hr:0.99,hits:0.99,so:1.01,roof:'Open',windSens:2,lf:336,cf:402,rf:335,elev:10,turf:'Grass',windDir:340,note:'Slight pitcher lean; cool river air at night'},
+  {stadium:'Target Field',team:'MIN',run:0.97,hr:0.95,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:339,cf:411,rf:328,elev:830,turf:'Grass',windDir:25,note:'Cold springs suppress offense; warms mid-summer'},
   {stadium:'Comerica Park',team:'DET',run:0.97,hr:0.93,hits:1.00,so:1.02,roof:'Open',windSens:2,lf:345,cf:420,rf:330,elev:600,turf:'Grass',windDir:350,note:'Deep CF kills power; cold springs'},
-  {stadium:'PNC Park',team:'PIT',run:0.97,hr:0.96,hits:0.99,so:1.02,roof:'Open',windSens:2,lf:325,cf:399,rf:320,elev:730,turf:'Grass',windDir:15,note:'Bridge wind can suppress fly balls'},
-  {stadium:'Dodger Stadium',team:'LAD',run:0.95,hr:0.94,hits:0.98,so:1.02,roof:'Open',windSens:1,lf:330,cf:395,rf:330,elev:512,turf:'Grass',windDir:340,note:'Slight pitcher lean; ball does not carry at night'},
-  {stadium:'Tropicana Field',team:'TB',run:0.94,hr:0.92,hits:0.97,so:1.03,roof:'Dome',windSens:0,lf:315,cf:404,rf:322,elev:28,turf:'Turf',windDir:0,note:'Full dome; turf speeds play; pitcher lean'},
-  {stadium:'Progressive Field',team:'CLE',run:0.95,hr:0.94,hits:0.97,so:1.03,roof:'Open',windSens:2,lf:325,cf:405,rf:325,elev:653,turf:'Grass',windDir:350,note:'Lake Erie wind suppresses night games'},
+  {stadium:'Progressive Field',team:'CLE',run:0.96,hr:0.94,hits:0.97,so:1.03,roof:'Open',windSens:2,lf:325,cf:405,rf:325,elev:653,turf:'Grass',windDir:350,note:'Lake Erie wind suppresses night games'},
   {stadium:'loanDepot park',team:'MIA',run:0.96,hr:0.94,hits:0.98,so:1.02,roof:'Retractable',windSens:0,lf:344,cf:407,rf:335,elev:6,turf:'Grass',windDir:0,note:'Humid climate; dome keeps conditions flat'},
   {stadium:'American Family Field',team:'MIL',run:0.96,hr:0.92,hits:0.98,so:1.03,roof:'Retractable',windSens:2,lf:344,cf:400,rf:345,elev:635,turf:'Grass',windDir:0,note:'Cold springs suppress offense early season'},
-  {stadium:'Minute Maid Park',team:'HOU',run:0.93,hr:0.91,hits:0.96,so:1.04,roof:'Retractable',windSens:0,lf:315,cf:435,rf:326,elev:43,turf:'Grass',windDir:0,note:'Tal Hill gone; now pitcher-leaning neutral'},
-  {stadium:'Citi Field',team:'NYM',run:0.93,hr:0.91,hits:0.96,so:1.04,roof:'Open',windSens:3,lf:335,cf:408,rf:330,elev:20,turf:'Grass',windDir:355,note:'Marine air from Flushing Bay suppresses HRs'},
-  {stadium:'T-Mobile Park',team:'SEA',run:0.92,hr:0.88,hits:0.95,so:1.04,roof:'Retractable',windSens:1,lf:331,cf:405,rf:326,elev:0,turf:'Grass',windDir:315,note:'Damp air suppresses ball; retractable roof'},
-  {stadium:'Oakland Coliseum',team:'OAK',run:0.91,hr:0.88,hits:0.94,so:1.05,roof:'Open',windSens:3,lf:330,cf:400,rf:330,elev:23,turf:'Grass',windDir:0,note:'Bay fogs; largest foul territory in MLB'},
-  {stadium:'Petco Park',team:'SD',run:0.88,hr:0.85,hits:0.92,so:1.06,roof:'Open',windSens:2,lf:336,cf:396,rf:322,elev:62,turf:'Grass',windDir:315,note:'Marine layer consistently suppresses offense'},
-  {stadium:'Oracle Park',team:'SF',run:0.87,hr:0.81,hits:0.92,so:1.07,roof:'Open',windSens:4,lf:339,cf:399,rf:309,elev:0,turf:'Grass',windDir:270,note:'Bay winds kill fly balls; best pitcher park'}
+  {stadium:'Dodger Stadium',team:'LAD',run:0.95,hr:0.93,hits:0.97,so:1.03,roof:'Open',windSens:1,lf:330,cf:395,rf:330,elev:512,turf:'Grass',windDir:340,note:'One of best pitcher parks; ball does not carry at night'},
+  {stadium:'Minute Maid Park',team:'HOU',run:0.94,hr:0.91,hits:0.96,so:1.04,roof:'Retractable',windSens:0,lf:315,cf:435,rf:326,elev:43,turf:'Grass',windDir:0,note:'Consistent pitcher lean; Crawford Boxes skew HR factor'},
+  {stadium:'Citi Field',team:'NYM',run:0.93,hr:0.90,hits:0.96,so:1.04,roof:'Open',windSens:3,lf:335,cf:408,rf:330,elev:20,turf:'Grass',windDir:355,note:'Improved slightly 2025; still marine air suppression'},
+  {stadium:'Wrigley Field',team:'CHC',run:0.89,hr:0.88,hits:0.95,so:1.04,roof:'Open',windSens:4,lf:355,cf:400,rf:353,elev:595,turf:'Grass',windDir:45,note:'Major shift — now suppresses runs 10pct+; wind in off 2024-25'},
+  {stadium:'T-Mobile Park',team:'SEA',run:0.88,hr:0.85,hits:0.93,so:1.05,roof:'Retractable',windSens:1,lf:331,cf:405,rf:326,elev:0,turf:'Grass',windDir:315,note:'Lowest run-scoring park in MLB 2025; damp marine air'},
+  {stadium:'Petco Park',team:'SD',run:0.89,hr:0.86,hits:0.93,so:1.06,roof:'Open',windSens:2,lf:336,cf:396,rf:322,elev:62,turf:'Grass',windDir:315,note:'Marine layer consistently suppresses offense'},
+  {stadium:'Oracle Park',team:'SF',run:0.87,hr:0.81,hits:0.92,so:1.07,roof:'Open',windSens:4,lf:339,cf:399,rf:309,elev:0,turf:'Grass',windDir:270,note:'Bay winds kill fly balls; consistently best pitcher park'},
+  {stadium:'GMS Field',team:'TB',run:0.99,hr:1.02,hits:0.99,so:1.00,roof:'Open',windSens:2,lf:330,cf:404,rf:320,elev:15,turf:'Grass',windDir:180,note:'New Rays park 2026; projects neutral to slight hitter lean'},
+  {stadium:'Sutter Health Park',team:'ATH',run:0.95,hr:0.90,hits:0.97,so:1.03,roof:'Open',windSens:3,lf:330,cf:400,rf:330,elev:25,turf:'Grass',windDir:270,note:'Most pitcher-friendly PCL park 2024; projects pitcher lean'}
 ];
 
 // ═══════════════════════════════════════════════
@@ -2785,8 +2786,11 @@ function parseLineupPaste() {
   });
   var totalTeams = Object.keys(window.PARSED_LINEUPS).length;
   console.log('[Lineups] Merged ' + Object.keys(lineups).length + ' teams — total stored: ' + totalTeams);
-  // Save today's date so we know when to reset tomorrow
-  try { localStorage.setItem('diamond_lineup_date', new Date().toISOString().slice(0,10)); } catch(e) {}
+  // Persist to localStorage so lineups survive page refresh
+  try {
+    localStorage.setItem('diamond_lineups_store', JSON.stringify(window.PARSED_LINEUPS));
+    localStorage.setItem('diamond_lineup_date', new Date().toISOString().slice(0,10));
+  } catch(e) {}
 
   // Auto-rescore games that have lineup data
   var games = (typeof LIVE_GAMES !== 'undefined' && LIVE_GAMES.length) ? LIVE_GAMES : [];
@@ -3409,15 +3413,24 @@ function loadBets() {
 }
 
 function resetLineupsIfNewDay() {
-  // Clear pasted lineups if they're from a previous day
   try {
     var storedDate = localStorage.getItem('diamond_lineup_date');
-    var today = new Date().toISOString().slice(0, 10); // "2026-03-31"
+    var today = new Date().toISOString().slice(0, 10);
     if (storedDate !== today) {
-      // New day — clear lineups
       window.PARSED_LINEUPS = null;
+      localStorage.removeItem('diamond_lineups_store');
       localStorage.setItem('diamond_lineup_date', today);
-      console.log('[Lineups] New day detected — lineups cleared for', today);
+      console.log('[Lineups] New day — lineups cleared for', today);
+    } else {
+      // Same day — restore lineups from localStorage
+      try {
+        var stored = localStorage.getItem('diamond_lineups_store');
+        if (stored) {
+          window.PARSED_LINEUPS = JSON.parse(stored);
+          var teams = Object.keys(window.PARSED_LINEUPS);
+          if (teams.length) console.log('[Lineups] Restored from storage:', teams.length, 'teams —', teams.join(', '));
+        }
+      } catch(e) {}
     }
   } catch(e) {}
 }
