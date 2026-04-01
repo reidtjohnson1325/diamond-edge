@@ -1946,11 +1946,13 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var mlFormEdge  = (homRunDiffP - awyRunDiffP) * 0.12;
   var mlContext   = 0.03 + umpRunAdj * 0.02; // home field + ump
   var mlRaw = 0.50 + mlSPedge + mlBPedge + mlOffEdge + mlFormEdge + mlContext;
-  mlRaw = Math.max(0.28, Math.min(0.72, mlRaw));
-  // Determine stronger side
+  mlRaw = Math.max(0.22, Math.min(0.78, mlRaw));
+  // Score = 50 + deviation * scale
+  // neutral (0.50) -> 50, strong edge (0.70) -> 78, dominant (0.78) -> 90
   var homeFavored = mlRaw >= 0.50;
-  var mlScore = Math.round(homeFavored ? 40 + mlRaw * 60 : 40 + (1 - mlRaw) * 60);
-  mlScore = Math.min(92, Math.max(30, mlScore));
+  var mlDev = Math.abs(mlRaw - 0.50); // 0 to 0.28
+  var mlScore = Math.round(50 + mlDev * 142);
+  mlScore = Math.min(92, Math.max(25, mlScore));
   var mlPlay  = homeFavored ? homeData.abbr + ' ML' : awayData.abbr + ' ML';
   var mlEdge  = parseFloat(Math.abs(mlRaw - 0.50) * 20).toFixed(1);
   var mlFactors = [
@@ -1979,10 +1981,11 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
     - (bpQuality - 0.50) * 0.18       // good bullpens → under
     + envBoost * 0.15                  // park + weather
     + umpRunAdj * 0.04;                // ump tendency
-  ouRaw = Math.max(0.25, Math.min(0.75, ouRaw));
+  ouRaw = Math.max(0.22, Math.min(0.78, ouRaw));
   var ouFavorOver = ouRaw >= 0.50;
-  var ouScore = Math.round(ouFavorOver ? 40 + ouRaw * 60 : 40 + (1-ouRaw) * 60);
-  ouScore = Math.min(92, Math.max(28, ouScore));
+  var ouDev = Math.abs(ouRaw - 0.50);
+  var ouScore = Math.round(50 + ouDev * 142);
+  ouScore = Math.min(92, Math.max(25, ouScore));
   var ouPlay  = ouFavorOver ? 'OVER' : 'UNDER';
   var ouEdge  = parseFloat(Math.abs(ouRaw - 0.50) * 22).toFixed(1);
   var ouFactors = [
