@@ -2634,12 +2634,30 @@ async function loadBvPForGames(games) {
     // Confirmed lineup gives us batting order so we target the real top-5 hitters
     var getLineupBatters = async function(confirmedLineup, teamId) {
       if (confirmedLineup && confirmedLineup.length >= 8) {
-        // Use confirmed lineup — filter out pitcher slot, take top 5 by batting order
-        return confirmedLineup
+        // Use confirmed lineup — filter out pitcher slot, take top 5
+        var batters = confirmedLineup
           .filter(function(p) { return p.pos !== 'P' && p.pos !== 'SP'; })
-          .slice(0, 5)
-          .map(function(p) { return {id: p.id, name: p.name}; })
-          .filter(function(p) { return p.id; });
+          .slice(0, 5);
+        // For pasted lineups (no id), resolve IDs via roster
+        var hasIds = batters.some(function(p) { return p.id; });
+        if (!hasIds && teamId) {
+          // Fetch roster to get IDs, then match by name
+          var roster = await fetchRoster(teamId);
+          batters = batters.map(function(b) {
+            var match = roster.find(function(r) {
+              if (!r.name || !b.name) return false;
+              var rn = r.name.toLowerCase(); var bn = b.name.toLowerCase();
+              // Match on last name or full name
+              var rlast = rn.split(' ').pop(); var blast = bn.replace(/^[a-z]\.\s*/,'').split(' ').pop();
+              return rn.indexOf(blast) !== -1 || bn.indexOf(rlast) !== -1;
+            });
+            return match ? {id: match.id, name: b.name} : null;
+          }).filter(Boolean);
+        } else {
+          batters = batters.map(function(p) { return {id: p.id, name: p.name}; })
+                          .filter(function(p) { return p.id; });
+        }
+        if (batters.length >= 3) return batters;
       }
       // Fall back to roster fetch
       return teamId ? await fetchRoster(teamId) : [];
@@ -2968,6 +2986,16 @@ function parseLineupPaste() {
       renderAll();
       var totalStored = window.PARSED_LINEUPS ? Object.keys(window.PARSED_LINEUPS).length : 0;
     status.textContent = found + ' players parsed (' + Object.keys(lineups).length + ' teams) — ' + totalStored + ' total teams stored';
+      // Re-run BvP for games that now have confirmed lineups
+      var gamesNeedingBvP = (typeof LIVE_GAMES !== 'undefined' ? LIVE_GAMES : []).filter(function(g) {
+        return lineups[g.away] || lineups[g.home];
+      });
+      if (gamesNeedingBvP.length && typeof loadBvPForGames === 'function') {
+        loadBvPForGames(gamesNeedingBvP).then(function() {
+          renderAll();
+          status.textContent = found + ' players parsed — BvP updated';
+        });
+      }
     });
   }
 }
@@ -3235,7 +3263,7 @@ function renderBvP() {
       var imp = b.sig==='hot'?'YRFI / Over / lower KO line':b.sig==='cold'?'NRFI / Under / higher KO line':'No strong signal';
       if (b.sig==='hot') hot++;
       if (b.sig==='cold') cold++;
-      if (b.kpct>28&&b.pa>15) ko++;
+      if (b.kpct>30&&b.pa>=5) ko++;  // high K% vs this pitcher = affects KO line
       totalPa+=b.pa; cnt++;
       var kc = b.kpct>30?'var(--rd)':b.kpct<18?'var(--gn)':'var(--tx)';
       var tr = document.createElement('tr');
