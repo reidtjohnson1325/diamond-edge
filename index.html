@@ -2017,16 +2017,32 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   };
   var awyTop3q = getTop3Quality(game.awayLineup, awyOffp);
   var homTop3q  = getTop3Quality(game.homeLineup, homOffp);
-  var awySuppress = awySPp.k9 * 0.6 + (1 - awyTop3q) * 0.4; // away SP vs home top-3
-  var homSuppress = homSPp.k9 * 0.6 + (1 - homTop3q) * 0.4;  // home SP vs away top-3
-  var avgSuppress = (awySuppress + homSuppress) / 2;
-  var parkNRFI  = pct(1/pfHR, 1.0, 0.15, true); // lower HR park = better NRFI
-  var nrfiRaw = 0.30
-    + (awFI_era + homFI_era) / 2 * 0.30
-    + avgSuppress * 0.35
-    + (awFI_bb + homFI_bb) / 2 * 0.12
-    + parkNRFI * 0.13
-    + umpKAdj * 0.05;
+  // NRFI: deviation-from-neutral formula (same approach as KO fix)
+  // Each factor pushes score above or below 0.50 baseline
+  // Good NRFI scenario: elite SP, low offense, pitcher park, big K zone ump
+  // awySuppress/homSuppress: how much each SP suppresses first-inning scoring
+  // k9 percentile near 1.0 = great K pitcher = better suppression
+  // top3q near 0.0 = weak top of order = better suppression
+  var awySuppress = (awySPp.k9 - 0.50) * 0.6 + (0.50 - awyTop3q) * 0.4;
+  var homSuppress = (homSPp.k9 - 0.50) * 0.6 + (0.50 - homTop3q) * 0.4;
+  var avgSuppress = (awySuppress + homSuppress) / 2; // range ~-0.50 to +0.50
+
+  // First-inning ERA: lower ERA = better NRFI. awFI_era is a percentile (higher = better ERA)
+  var fiEraEdge = ((awFI_era - 0.50) + (homFI_era - 0.50)) / 2; // range ~-0.35 to +0.35
+
+  // BB rate: lower BB in 1st = fewer baserunners = better NRFI
+  var fibbEdge = ((awFI_bb - 0.50) + (homFI_bb - 0.50)) / 2;
+
+  // Park: lower HR park = better NRFI
+  var parkNRFI = pct(1/pfHR, 1.0, 0.15, true);
+  var parkEdge = parkNRFI - 0.50; // range ~-0.20 to +0.20
+
+  var nrfiRaw = 0.50
+    + fiEraEdge   * 0.30  // First-inning ERA quality
+    + avgSuppress * 0.35  // SP K rate vs top-of-order quality
+    + fibbEdge    * 0.12  // Walk rate (fewer walks = better)
+    + parkEdge    * 0.13  // Park HR factor
+    + umpKAdj     * 0.05; // Ump K zone
   nrfiRaw = Math.max(0.22, Math.min(0.88, nrfiRaw));
   var nrfiScore = Math.round(nrfiRaw * 100);
   nrfiScore = Math.min(84, Math.max(25, nrfiScore)); // NRFI capped at 84 — high variance bet
