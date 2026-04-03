@@ -3666,12 +3666,16 @@ function renderTodayPicker() {
     var playId = todayStr + '_' + g.id + '_' + p.tkey;
     var logCount = alreadyLogged.filter(function(id) { return id === playId; }).length;
     var cc = p.conf === 'STRONG' ? 'cs' : 'cl';
-    var typeColor = {ML:'var(--bl)','O/U':'var(--pu)',NRFI:'var(--tl)',KO:'var(--am)'}[p.type];
+    // Detect YRFI/KU from play text for correct badge display
+    var displayType = p.type;
+    if (p.type === 'NRFI' && p.play && p.play.indexOf('YRFI') !== -1) displayType = 'YRFI';
+    if (p.type === 'KO'   && p.play && p.play.indexOf(' u')    !== -1) displayType = 'KU';
+    var typeColor = {ML:'var(--bl)','O/U':'var(--pu)',NRFI:'var(--tl)',YRFI:'rgba(251,113,133,1)',KO:'var(--am)',KU:'var(--am)'}[displayType] || 'var(--mu)';
 
     var row = document.createElement('div');
     row.className = 'today-play-row';
     row.id = 'tpr-' + i;
-    var typeSlug = p.type.toLowerCase().replace('/','').replace('o/u','ou').replace('ku','ko');
+    var typeSlug = displayType.toLowerCase().replace('/','').replace('o/u','ou');
     // Always show input — multiple bets at different lines are allowed
     var loggedBadge = logCount > 0
       ? '<span style="font-family:var(--fm);font-size:9px;color:var(--gn);margin-right:4px">'+logCount+' logged</span>'
@@ -3679,7 +3683,7 @@ function renderTodayPicker() {
     // ML = just odds. O/U, NRFI, KO = line number + odds separately
     // O/U and KO need a line number, ML and NRFI just need odds
     var hasLine = p.type === 'O/U' || p.type === 'KO';
-    var linePH = {'O/U':'Total (7.5)','KO':'Ks (8.5)'}[p.type] || 'Line';
+    var linePH = {'O/U':'Total (7.5)','KO':'Ks (8.5)'}[displayType] || 'Line';
     var lineInputHtml = hasLine
       ? '<input class="tpr-line-input show" placeholder="'+linePH+'" style="width:80px" />'
       : '';
@@ -3697,7 +3701,7 @@ function renderTodayPicker() {
       '<button class="tpr-lock-btn show">Lock it in</button>';
     row.innerHTML =
       '<div class="tpr-check" id="chk-'+i+'"></div>' +
-      '<span class="pl p-'+typeSlug+'" style="flex-shrink:0">'+p.type+'</span>' +
+      '<span class="pl p-'+typeSlug+'" style="flex-shrink:0">'+displayType+'</span>' +
       '<span class="tpr-match">'+g.away+' @ '+g.home+'</span>' +
       '<span class="tpr-play">'+p.play+'</span>' +
       '<span class="tpr-conf '+cc+'">'+p.conf+'</span>' +
@@ -3752,6 +3756,10 @@ function renderTodayPicker() {
         // If Run Line toggle is on, convert the play
         var logType = type;
         var logPlay = play;
+        // Detect YRFI: type is NRFI but play says YRFI
+        if (type === 'NRFI' && play && play.indexOf('YRFI') !== -1) logType = 'YRFI';
+        // Detect KU: type is KO but play has ' u' (under)
+        if (type === 'KO' && play && play.indexOf(' u') !== -1) logType = 'KU';
         if (isRunLine) {
           logType = 'RL';
           // Convert "NYY ML" → "NYY -1.5"
@@ -3990,8 +3998,14 @@ function updateTrackerStats() {
   // Best bet type
   var types = ['ML','O/U','NRFI','KO'];
   var bestType = '--', bestRate = 0;
+  // Helper: YRFI rolls into NRFI, KU rolls into KO for stats
+  var typeMatch = function(bet, t) {
+    if (t === 'NRFI') return bet.type === 'NRFI' || bet.type === 'YRFI';
+    if (t === 'KO')   return bet.type === 'KO'   || bet.type === 'KU';
+    return bet.type === t;
+  };
   types.forEach(function(t) {
-    var tBets = settled.filter(function(b) { return b.type === t && b.result !== 'P'; });
+    var tBets = settled.filter(function(b) { return typeMatch(b, t) && b.result !== 'P'; });
     if (!tBets.length) return;
     var rate = tBets.filter(function(b) { return b.result === 'W'; }).length / tBets.length;
     if (rate > bestRate) { bestRate = rate; bestType = t; }
@@ -4012,11 +4026,11 @@ function updateTrackerStats() {
     row.innerHTML = '';
     var typeColors = {ML:'var(--bl)','O/U':'var(--pu)',NRFI:'var(--tl)',KO:'var(--am)'};
     types.forEach(function(t) {
-      var tBets = settled.filter(function(b) { return b.type === t && b.result !== 'P'; });
+      var tBets = settled.filter(function(b) { return typeMatch(b, t) && b.result !== 'P'; });
       var tW = tBets.filter(function(b) { return b.result === 'W'; }).length;
       var tL = tBets.filter(function(b) { return b.result === 'L'; }).length;
       var tRate = tBets.length ? Math.round(tW / tBets.length * 100) : 0;
-      var tPL = settled.filter(function(b){return b.type===t;}).reduce(function(a,b){return a+(b.pl||0);},0);
+      var tPL = settled.filter(function(b){ return typeMatch(b, t); }).reduce(function(a,b){return a+(b.pl||0);},0);
       var c = typeColors[t];
       var d = document.createElement('div');
       d.className = 'tycard';
