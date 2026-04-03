@@ -93,7 +93,7 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
 .mm{font-family:var(--fm);font-size:9px;color:var(--mu);margin-top:1px}
 .pl{display:inline-block;font-family:var(--fm);font-size:9px;font-weight:500;letter-spacing:.07em;padding:2px 7px;border-radius:3px;text-transform:uppercase;white-space:nowrap}
 .p-ml{background:var(--bld);color:var(--bl)}.p-ou{background:var(--pud);color:var(--pu)}
-.p-nrfi{background:var(--tld);color:var(--tl)}.p-yrfi{background:rgba(251,113,133,.15);color:#fb7185}.p-rl{background:rgba(139,92,246,.15);color:#8b5cf6}.p-ko{background:var(--amd);color:var(--am)}
+.p-nrfi{background:var(--tld);color:var(--tl)}.p-yrfi{background:rgba(251,113,133,.15);color:#fb7185}.p-rl{background:rgba(139,92,246,.15);color:#8b5cf6}.p-ku{background:rgba(249,115,22,.15);color:#f97316}.p-ko{background:var(--amd);color:var(--am)}
 .sb2{display:flex;align-items:center;gap:7px}
 .sb2-bg{width:68px;height:4px;background:var(--sf2);border-radius:2px;overflow:hidden;flex-shrink:0}
 .sb2-f{height:100%;border-radius:2px}
@@ -461,6 +461,7 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
           <option value="O/U">O/U</option>
           <option value="NRFI">NRFI</option>
           <option value="YRFI">YRFI</option>
+          <option value="KU">KU (Under)</option>
           <option value="KO">KO</option>
           <option value="Other">Other</option>
         </select>
@@ -2136,11 +2137,23 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
     + arsenalBoost                                       // Pitch arsenal quality
     + savantWhiffFactor;                                 // Savant whiff%
   koRaw = Math.max(0.20, Math.min(0.88, koRaw));
-  var koScore = Math.round(koRaw * 100);
+  // KO: same flip logic as NRFI/YRFI
+  // koRaw > 0.50 = over favored, koRaw < 0.50 = under favored
+  var koIsOver = koRaw >= 0.50;
+  var koDev = Math.abs(koRaw - 0.50);
+  var koScore = Math.round(50 + koDev * 142);
   koScore = Math.min(92, Math.max(25, koScore));
   var koLine  = spForKO ? (Math.round(spForKO.kPer9 / 9 * expIP * 2) / 2).toFixed(1) : '6.5';
-  var koPlay  = koSpName + ' o' + koLine + ' Ks';
-  var koEdge  = parseFloat(Math.abs(koRaw - 0.50) * 22).toFixed(1);
+  // Over: pitcher likely to exceed line. Under: contact pitcher, low-K environment
+  var koPlay  = koIsOver
+    ? koSpName + ' o' + koLine + ' Ks'
+    : koSpName + ' u' + koLine + ' Ks';
+  // For under, invert score so it reads correctly (higher = more confident in under)
+  if (!koIsOver) {
+    koScore = Math.round(50 + koDev * 142);
+    koScore = Math.min(92, Math.max(25, koScore));
+  }
+  var koEdge  = parseFloat(koDev * 22).toFixed(1);
   var koFactors = [
     {n:koSpName+' K/9', v:spForKO?spForKO.kPer9.toFixed(1):'N/A', pct:Math.round(spForKOp.k9*100)},
     {n:koSpName+' K-BB%', v:spForKO?(spForKO.kbb*100).toFixed(1)+'%':'N/A', pct:Math.round(spForKOp.kbb*100)},
@@ -3658,7 +3671,7 @@ function renderTodayPicker() {
     var row = document.createElement('div');
     row.className = 'today-play-row';
     row.id = 'tpr-' + i;
-    var typeSlug = p.type.toLowerCase().replace('/','').replace('o/u','ou');
+    var typeSlug = p.type.toLowerCase().replace('/','').replace('o/u','ou').replace('ku','ko');
     // Always show input — multiple bets at different lines are allowed
     var loggedBadge = logCount > 0
       ? '<span style="font-family:var(--fm);font-size:9px;color:var(--gn);margin-right:4px">'+logCount+' logged</span>'
@@ -3844,7 +3857,7 @@ function renderBetLog() {
   sorted.forEach(function(bet) {
     var plVal = bet.pl !== null ? bet.pl : (bet.result ? calcPL(bet.odds, bet.units, bet.result) : null);
     var cc        = bet.conf === 'STRONG' ? 'cs' : bet.conf === 'LEAN' ? 'cl' : 'cx';
-    var typeClass = {ML:'p-ml','O/U':'p-ou',NRFI:'p-nrfi',KO:'p-ko',RL:'p-rl',YRFI:'p-yrfi'}[bet.type] || 'p-ml';
+    var typeClass = {ML:'p-ml','O/U':'p-ou',NRFI:'p-nrfi',KO:'p-ko',RL:'p-rl',YRFI:'p-yrfi',KU:'p-ku'}[bet.type] || 'p-ml';
     var tr = document.createElement('tr');
     function td(content, style) {
       var cell = document.createElement('td');
