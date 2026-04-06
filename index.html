@@ -1782,7 +1782,7 @@ function spPercents(sp) {
   return {
     era:  pct(sp.era,   LEAGUE.spEra,  0.90, false),
     xfip: pct(sp.xfip,  LEAGUE.spXfip, 0.80, false),
-    k9:   pct(sp.kPer9, LEAGUE.spK9,   2.00, true),
+    k9:   pct(sp.kPer9, LEAGUE.spK9,   1.20, true),
     bb9:  pct(sp.bbPer9,LEAGUE.spBb9,  1.20, false),
     kbb:  pct(sp.kbb,   LEAGUE.spKbb,  0.08, true),
     whip: pct(sp.whip,  LEAGUE.spWhip, 0.20, false),
@@ -1873,8 +1873,8 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var blendSavantSP = function(spPercents, pitcherId) {
     var sv = getSavantPitcher(pitcherId);
     if (!sv) return spPercents; // no Savant data — use MLB stats as-is
-    var SAVANT_WT = 0.40;
-    var MLB_WT    = 0.60;
+    var SAVANT_WT = 0.50;
+    var MLB_WT    = 0.50;
     // Savant K% → percentile (league avg ~22%, range 12-35%)
     var svKpct = sv.k_pct ? pct(sv.k_pct/100, 0.228, 0.06, true) : null;
     // Savant whiff% → percentile (league avg ~25%, range 15-35%)
