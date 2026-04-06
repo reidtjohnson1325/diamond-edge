@@ -2155,7 +2155,9 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
     koScore = Math.min(92, Math.max(25, koScore));
   }
   var koEdge  = parseFloat(koDev * 22).toFixed(1);
+  // KO note: this projection is pre-game only — model uses season stats not live pace
   var koFactors = [
+    {n:'⚠ Pre-game only — verify live line', v:'Season stats projection', pct:50},
     {n:koSpName+' K/9', v:spForKO?spForKO.kPer9.toFixed(1):'N/A', pct:Math.round(spForKOp.k9*100)},
     {n:koSpName+' K-BB%', v:spForKO?(spForKO.kbb*100).toFixed(1)+'%':'N/A', pct:Math.round(spForKOp.kbb*100)},
     {n:'Opponent K%', v:oppOff?(oppOff.kpct*100).toFixed(1)+'%':'N/A', pct:Math.round(oppKpct*100)},
@@ -2362,6 +2364,9 @@ function buildGameFromAPI(g, wx) {
   return {
     id: g.gamePk,
     away: awayAbbr, home: homeAbbr,
+    gameState: (g.status && g.status.abstractGameState) || 'Preview',
+    detailedState: (g.status && g.status.detailedState) || 'Scheduled',
+    currentInning: (g.linescore && g.linescore.currentInning) || 0,
     awayTeamId: awayTeamId, homeTeamId: homeTeamId,
     awayPitcherId: awayPitcher.id, homePitcherId: homePitcher.id,
     awayP: awayPitcher.fullName||'TBD', awayH: KNOWN_LHP[awayPitcher.id] || 'R',
@@ -3310,7 +3315,10 @@ function allPlays() {
   var games = USING_SAMPLE ? SAMPLE_GAMES : LIVE_GAMES;
   var out = [];
   games.forEach(function(g) {
+    var isLive = g.gameState === 'Live' || g.gameState === 'Final' || g.detailedState === 'In Progress' || g.detailedState === 'Final';
     ['ml','ou','nrfi','ko'].forEach(function(t) {
+      // Hide KO plays for live/final games — model uses season stats not live pace
+      if (t === 'ko' && isLive) return;
       var s = g.scores[t];
       var tl = {ml:'ML',ou:'O/U',nrfi:'NRFI',ko:'KO'}[t];
       out.push({game:g, type:tl, tkey:t, play:s.play, score:s.score, edge:s.edge, conf:s.conf, kf:s.factors[0].n+': '+s.factors[0].v});
