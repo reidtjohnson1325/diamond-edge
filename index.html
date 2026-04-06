@@ -1784,7 +1784,7 @@ function spPercents(sp) {
     xfip: pct(sp.xfip,  LEAGUE.spXfip, 0.80, false),
     k9:   pct(sp.kPer9, LEAGUE.spK9,   1.20, true),
     bb9:  pct(sp.bbPer9,LEAGUE.spBb9,  1.20, false),
-    kbb:  pct(sp.kbb,   LEAGUE.spKbb,  0.08, true),
+    kbb:  pct(sp.kbb,   LEAGUE.spKbb,  0.10, true),
     whip: pct(sp.whip,  LEAGUE.spWhip, 0.20, false),
     overall: (pct(sp.xfip,LEAGUE.spXfip,0.80,false)*0.4 + pct(sp.kbb,LEAGUE.spKbb,0.08,true)*0.35 + pct(sp.whip,LEAGUE.spWhip,0.20,false)*0.25)
   };
@@ -1798,7 +1798,7 @@ function offPercents(off) {
     bbpct:pct(off.bbpct, LEAGUE.offBbpct,0.02, true),
     iso:  pct(off.iso,   LEAGUE.offIso,  0.04, true),
     rpg:  pct(off.runsPerGame, LEAGUE.offRpg, 0.80, true),
-    overall: (pct(off.ops,LEAGUE.offOps,0.08,true)*0.45 + pct(off.kpct,LEAGUE.offKpct,0.04,false)*0.25 + pct(off.iso,LEAGUE.offIso,0.04,true)*0.30)
+    overall: (pct(off.ops,LEAGUE.offOps,0.08,true)*0.40 + pct(off.kpct,LEAGUE.offKpct,0.04,false)*0.20 + pct(off.iso,LEAGUE.offIso,0.04,true)*0.25 + pct(off.runsPerGame||LEAGUE.offRpg,LEAGUE.offRpg,0.80,true)*0.15)
   };
 }
 
@@ -1953,7 +1953,7 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
       else if (d==='N'||d==='NE'||d==='NW') windImpact = -wx.wind * 0.03;
     }
   }
-  var tempAdj  = (wx.temp - 70) * 0.015;
+  var tempAdj  = (wx.temp - 70) * 0.010; // tightened: hot weather real but not 8pts alone
   var humidAdj = (wx.humidity - 50) * (-0.004);
   var envBoost = (pf - 1.0) + windImpact + tempAdj + humidAdj; // positive = hitter-friendly
 
@@ -1972,7 +1972,7 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var mlBPedge    = (homBPp.overall - awyBPp.overall) * 0.22;
   var mlOffEdge   = (homOffp.overall - awyOffp.overall) * 0.24;
   var mlFormEdge  = (homRunDiffP - awyRunDiffP) * 0.12;
-  var mlContext   = 0.03 + umpRunAdj * 0.02; // home field + ump
+  var mlContext   = 0.04 + umpRunAdj * 0.02; // home field (~54% win rate) + ump
   var mlRaw = 0.50 + mlSPedge + mlBPedge + mlOffEdge + mlFormEdge + mlContext;
   mlRaw = Math.max(0.22, Math.min(0.78, mlRaw));
   // Score = 50 + deviation * scale
@@ -2031,8 +2031,11 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // ── NRFI ────────────────────────────────────────────────────────
   // Only 1st inning: top-3 hitters vs starter, SP 1st-inn ERA, SP BB%, park
   // Weights: SP 1st-inn 30%, Top-3 hitters 35%, SP BB% 12%, Park+wx 13%, BvP signal 10%
-  var awFI_era  = awyFI ? pct(awyFI.era,  LEAGUE.spFinnEra, 1.20, false) : awySPp.era * 0.8 + 0.10;
-  var homFI_era = homFI ? pct(homFI.era,  LEAGUE.spFinnEra, 1.20, false) : homSPp.era * 0.8 + 0.10;
+  // spFinnEra baseline: first-inning ERA tends to be ~4.0-4.2 for average starters
+  // Using 4.10 so average pitchers score near 0.50 (neutral)
+  var FINN_ERA_AVG = 4.10;
+  var awFI_era  = awyFI ? pct(awyFI.era,  FINN_ERA_AVG, 1.20, false) : awySPp.era * 0.8 + 0.10;
+  var homFI_era = homFI ? pct(homFI.era,  FINN_ERA_AVG, 1.20, false) : homSPp.era * 0.8 + 0.10;
   var awFI_bb   = awyFI ? pct(awyFI.bbpct, 0.08, 0.04, false) : awySPp.bb9;
   var homFI_bb  = homFI ? pct(homFI.bbpct, 0.08, 0.04, false) : homSPp.bb9;
   // Top-3 suppression: high SP K% vs low offense OBP = NRFI friendly
@@ -2075,16 +2078,14 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
     + parkEdge    * 0.13  // Park HR factor
     + umpKAdj     * 0.05; // Ump K zone
   nrfiRaw = Math.max(0.22, Math.min(0.88, nrfiRaw));
-  var nrfiScore = Math.round(nrfiRaw * 100);
-  nrfiScore = Math.min(84, Math.max(25, nrfiScore)); // NRFI capped at 84 — high variance bet
-  // NRFI when run environment suppressed, YRFI when it's elevated
+  // Use same deviation formula as ML/OU for consistency
+  // 50 = neutral, deviation * 142 = score spread
+  var nrfiDev = Math.abs(nrfiRaw - 0.50);
+  var nrfiScore = Math.round(50 + nrfiDev * 142);
+  nrfiScore = Math.min(84, Math.max(25, nrfiScore)); // NRFI capped at 84 — high variance
+  // NRFI when run environment suppressed, YRFI when elevated
   var nrfiPlay  = nrfiRaw >= 0.50 ? 'NRFI' : 'YRFI';
-  var nrfiEdge  = parseFloat(Math.abs(nrfiRaw - 0.50) * 20).toFixed(1);
-  // For YRFI: invert the score so higher = more confident in runs scoring
-  if (nrfiPlay === 'YRFI') {
-    nrfiScore = Math.round((1 - nrfiRaw) * 100);
-    nrfiScore = Math.min(84, Math.max(25, nrfiScore));
-  }
+  var nrfiEdge  = parseFloat(nrfiDev * 20).toFixed(1);
   var nrfiFactors = [
     {n:'Away SP 1st-inn ERA',  v:awyFI?awyFI.era.toFixed(2)+(awyFI._derived?' (est)':''):(awySP?'~'+parseFloat((awySP.era*1.08).toFixed(2)):' N/A'), pct:Math.round(awFI_era*100)},
     {n:'Home SP 1st-inn ERA',  v:homFI?homFI.era.toFixed(2)+(homFI._derived?' (est)':''):(homSP?'~'+parseFloat((homSP.era*1.08).toFixed(2)):' N/A'), pct:Math.round(homFI_era*100)},
