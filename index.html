@@ -3315,10 +3315,13 @@ function allPlays() {
   var games = USING_SAMPLE ? SAMPLE_GAMES : LIVE_GAMES;
   var out = [];
   games.forEach(function(g) {
-    var isLive = g.gameState === 'Live' || g.gameState === 'Final' || g.detailedState === 'In Progress' || g.detailedState === 'Final';
+    var isInProgress = g.detailedState === 'In Progress' || g.gameState === 'Live';
+    var isFinal = g.detailedState === 'Final' || g.gameState === 'Final';
     ['ml','ou','nrfi','ko'].forEach(function(t) {
-      // Hide KO plays for live/final games — model uses season stats not live pace
-      if (t === 'ko' && isLive) return;
+      // Hide ALL plays for completed games
+      if (isFinal) return;
+      // Hide KO for in-progress games — season stats don't reflect live pace
+      if (t === 'ko' && isInProgress) return;
       var s = g.scores[t];
       var tl = {ml:'ML',ou:'O/U',nrfi:'NRFI',ko:'KO'}[t];
       out.push({game:g, type:tl, tkey:t, play:s.play, score:s.score, edge:s.edge, conf:s.conf, kf:s.factors[0].n+': '+s.factors[0].v});
