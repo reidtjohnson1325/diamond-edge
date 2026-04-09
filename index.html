@@ -1875,26 +1875,52 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
     if (!sv) return spPercents; // no Savant data — use MLB stats as-is
     var SAVANT_WT = 0.50;
     var MLB_WT    = 0.50;
-    // Savant K% → percentile (league avg ~22%, range 12-35%)
-    var svKpct = sv.k_pct ? pct(sv.k_pct/100, 0.228, 0.06, true) : null;
-    // Savant whiff% → percentile (league avg ~25%, range 15-35%)
-    var svWhiff = sv.whiff ? pct(sv.whiff/100, 0.25, 0.06, true) : null;
-    // Savant xwOBA against → percentile (lower is better, league avg .320)
-    var svXwoba = sv.xwoba_vs ? pct(sv.xwoba_vs, 0.320, 0.04, false) : null;
-    // Savant barrel% against → percentile (lower is better, league avg 8%)
-    var svBarrel = sv.barrel_vs ? pct(sv.barrel_vs/100, 0.08, 0.03, false) : null;
+    // Savant K% → percentile (league avg ~22.8%, range ±6%)
+    var svKpct   = sv.k_pct    ? pct(sv.k_pct/100,    0.228, 0.06,  true)  : null;
+    // Savant whiff% → percentile (league avg ~25%, range ±6%)
+    var svWhiff  = sv.whiff    ? pct(sv.whiff/100,     0.25,  0.06,  true)  : null;
+    // Savant xwOBA against → percentile (lower = better, league avg .315)
+    var svXwoba  = sv.xwoba_vs ? pct(sv.xwoba_vs,      0.315, 0.04,  false) : null;
+    // Savant barrel% against → percentile (lower = better, league avg 8%)
+    var svBarrel = sv.barrel_vs? pct(sv.barrel_vs/100, 0.08,  0.025, false) : null;
+    // Savant hard hit% against → percentile (lower = better, league avg 38%)
+    var svHardHit= sv.hard_hit_vs ? pct(sv.hard_hit_vs/100, 0.38, 0.06, false) : null;
+    // Savant exit velocity against → percentile (lower = better, league avg 88.5 mph)
+    var svEV     = sv.ev_vs    ? pct(sv.ev_vs,         88.5,  2.0,   false) : null;
+
+    // Contact quality score: xwOBA + hard_hit + barrel + EV — best predictors of run prevention
+    var contactQuality = null;
+    var cqCount = 0, cqSum = 0;
+    if (svXwoba)   { cqSum += svXwoba;   cqCount++; }
+    if (svHardHit) { cqSum += svHardHit; cqCount++; }
+    if (svBarrel)  { cqSum += svBarrel;  cqCount++; }
+    if (svEV)      { cqSum += svEV;      cqCount++; }
+    if (cqCount >= 2) contactQuality = cqSum / cqCount;
+
+    // Strikeout quality score: K% + whiff — best predictors of Ks
+    var koQuality = null;
+    if (svKpct && svWhiff) koQuality = (svKpct + svWhiff) / 2;
+    else if (svKpct) koQuality = svKpct;
 
     return {
-      overall: svKpct && svXwoba
-        ? spPercents.overall * MLB_WT + ((svKpct + svXwoba + (svBarrel||0.5)) / 3) * SAVANT_WT
-        : spPercents.overall,
-      k9:   svKpct  ? spPercents.k9  * MLB_WT + svKpct  * SAVANT_WT : spPercents.k9,
-      kbb:  spPercents.kbb,
-      bb9:  spPercents.bb9,
-      era:  svXwoba ? spPercents.era  * MLB_WT + svXwoba * SAVANT_WT : spPercents.era,
-      xfip: svXwoba ? spPercents.xfip * MLB_WT + svXwoba * SAVANT_WT : spPercents.xfip,
-      whiff: svWhiff || spPercents.whiff || 0.5,
-      savant: sv // keep raw for display
+      // Overall: 50% contact quality + 50% K quality (when available), else fall back
+      overall: contactQuality && koQuality
+        ? spPercents.overall * MLB_WT + ((contactQuality * 0.6 + koQuality * 0.4)) * SAVANT_WT
+        : contactQuality
+          ? spPercents.overall * MLB_WT + contactQuality * SAVANT_WT
+          : spPercents.overall,
+      k9:      koQuality ? spPercents.k9  * MLB_WT + koQuality  * SAVANT_WT : spPercents.k9,
+      kbb:     spPercents.kbb,
+      bb9:     spPercents.bb9,
+      era:     contactQuality ? spPercents.era  * MLB_WT + contactQuality * SAVANT_WT : spPercents.era,
+      xfip:    contactQuality ? spPercents.xfip * MLB_WT + contactQuality * SAVANT_WT : spPercents.xfip,
+      whiff:   svWhiff || spPercents.whiff || 0.5,
+      // Store all Savant metrics for use in model and display
+      savant: sv,
+      svContactQuality: contactQuality,
+      svKoQuality: koQuality,
+      svHardHit: svHardHit,
+      svEV: svEV
     };
   };
   // Blend if we have pitcher IDs
@@ -1967,34 +1993,45 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
 
   // ── MONEYLINE ──────────────────────────────────────────────────
   // Home team perspective — score > 50 means home team favored
-  // Weights: SP 32%, Bullpen 22%, Offense 24%, Form 12%, Context 10%
-  var mlSPedge    = (homSPp.overall - awySPp.overall) * 0.32;
-  var mlBPedge    = (homBPp.overall - awyBPp.overall) * 0.22;
-  var mlOffEdge   = (homOffp.overall - awyOffp.overall) * 0.24;
-  var mlFormEdge  = (homRunDiffP - awyRunDiffP) * 0.12;
-  var mlContext   = 0.04 + umpRunAdj * 0.02; // home field (~54% win rate) + ump
-  var mlRaw = 0.50 + mlSPedge + mlBPedge + mlOffEdge + mlFormEdge + mlContext;
+  // Weights rebuilt from factor analysis:
+  // SP 45% (only factor with real early-season signal)
+  // Offense 30% (OPS/ISO/RPG — decent sample by game 15)
+  // Bullpen ERA 15% (fatigue removed — all teams equal at 15 games)
+  // Context 10% (home field + ump run tendency)
+  // Form REMOVED — double-counts SP quality, noisy at 15 games
+  // Sample size gate: only use BP data if team has 10+ games
+  var homBPgames = homLog ? (homLog.last7W + homLog.last7L) : 0;
+  var awyBPgames = awyLog ? (awyLog.last7W + awyLog.last7L) : 0;
+  var homBPera_p = homBPgames >= 7 ? pct(homBP ? homBP.era : 4.20, 4.20, 0.60, false) : 0.50;
+  var awyBPera_p = awyBPgames >= 7 ? pct(awyBP ? awyBP.era : 4.20, 4.20, 0.60, false) : 0.50;
+  var mlSPedge   = (homSPp.overall - awySPp.overall) * 0.45;
+  var mlBPedge   = (homBPera_p - awyBPera_p) * 0.15;
+  var mlOffEdge  = (homOffp.overall - awyOffp.overall) * 0.30;
+  var mlContext  = 0.04 + umpRunAdj * 0.02; // home field + ump
+  var mlRaw = 0.50 + mlSPedge + mlBPedge + mlOffEdge + mlContext;
   mlRaw = Math.max(0.22, Math.min(0.78, mlRaw));
+  // Dead zone: if raw is within 0.06 of neutral (0.44-0.56), clamp score to SKIP
+  // These plays have no real conviction — model is basically saying coin flip
+  if (Math.abs(mlRaw - 0.50) < 0.06) mlRaw = 0.50; // force to neutral → SKIP
   // Score = 50 + deviation * scale
   // neutral (0.50) -> 50, strong edge (0.70) -> 78, dominant (0.78) -> 90
   var homeFavored = mlRaw >= 0.50;
   var mlDev = Math.abs(mlRaw - 0.50); // 0 to 0.28
-  var mlScore = Math.round(50 + mlDev * 142);
+  var mlScore = Math.round(50 + mlDev * 130); // tightened: reduce score inflation
   mlScore = Math.min(92, Math.max(25, mlScore));
   var mlPlay  = homeFavored ? homeData.abbr + ' ML' : awayData.abbr + ' ML';
   var mlEdge  = parseFloat(Math.abs(mlRaw - 0.50) * 20).toFixed(1);
   var mlFactors = [
-    {n: homSPp.overall > awySPp.overall ? homeData.abbr+' SP edge (xFIP)' : awayData.abbr+' SP edge (xFIP)',
-     v: (homSPp.overall > awySPp.overall ? homSP : awySP) ? ((homSPp.overall > awySPp.overall ? homSP : awySP).xfip||4.0).toFixed(2) : 'N/A',
+    {n: homSPp.overall > awySPp.overall ? homeData.abbr+' SP quality (Savant blend)' : awayData.abbr+' SP quality (Savant blend)',
+     v: (homSPp.overall > awySPp.overall ? homSP : awySP) ? ((homSPp.overall > awySPp.overall ? homSP : awySP).xfip||4.0).toFixed(2)+' xFIP' : 'N/A',
      pct: Math.round(Math.max(homSPp.overall, awySPp.overall)*100)},
-    {n:'SP K-BB% edge', v: (homSPp.overall>awySPp.overall?homSP:awySP) ? (((homSPp.overall>awySPp.overall?homSP:awySP).kbb||0)*100).toFixed(1)+'%':'N/A', pct:Math.round(Math.max(homSPp.kbb,awySPp.kbb)*100)},
-    {n:'Offense edge (OPS)', v:(homOffp.ops>awyOffp.ops?homOff:awyOff)?((homOffp.ops>awyOffp.ops?homOff:awyOff).ops||0.720).toFixed(3):'N/A', pct:Math.round(Math.max(homOffp.ops,awyOffp.ops)*100)},
+    {n:'Offense edge (OPS+ISO+RPG)', v:(homOffp.ops>awyOffp.ops?homOff:awyOff)?((homOffp.ops>awyOffp.ops?homOff:awyOff).ops||0.720).toFixed(3):'N/A', pct:Math.round(Math.max(homOffp.ops,awyOffp.ops)*100)},
     {n:'Platoon matchup', v:awyPlat||homPlat?'Applied':'Neutral', pct:Math.round(Math.max(awyOffp.overall,homOffp.overall)*100)},
-    {n:'Bullpen edge', v:(homBPp.overall>awyBPp.overall?homBP:awyBP)?((homBPp.overall>awyBPp.overall?homBP:awyBP).era||4.0).toFixed(2)+' ERA':'N/A', pct:Math.round(Math.max(homBPp.overall,awyBPp.overall)*100)},
-    {n:'Bullpen fatigue', v:'Away '+Math.round(awyBPp.fatigue*10)+'/10 | Home '+Math.round(homBPp.fatigue*10)+'/10', pct:Math.round(Math.min(awyBPp.fatigueP,homBPp.fatigueP)*100)},
-    {n:'Recent form L7', v:'Away '+(awyLog?awyLog.last7W+'-'+awyLog.last7L:'--')+' | Home '+(homLog?homLog.last7W+'-'+homLog.last7L:'--'), pct:Math.round(Math.max(awyRunDiffP,homRunDiffP)*100)},
-    {n:'Park factor', v:pf.toFixed(2), pct:Math.round(pf*50)},
-    {n:'Umpire run adj', v:(umpRunAdj>0?'+':'')+ump.runAdj.toFixed(1)+' runs/game', pct:50}
+    {n:'Bullpen ERA', v:(homBPera_p>awyBPera_p?homBP:awyBP)?((homBPera_p>awyBPera_p?homBP:awyBP).era||4.2).toFixed(2)+' ERA':(Math.max(homBPgames,awyBPgames)<7?'< 7 games (neutral)':'N/A'), pct:Math.round(Math.max(homBPera_p,awyBPera_p)*100)},
+    {n:'Home field + ump', v:'+0.04 base'+(umpRunAdj!==0?' | Ump '+(umpRunAdj>0?'+':'')+ump.runAdj.toFixed(1)+'/g':''), pct:54},
+    {n:'SP Savant K%', v:(homSPp.overall>awySPp.overall?homSPp:awySPp).savant?((homSPp.overall>awySPp.overall?homSPp:awySPp).savant.k_pct||'--')+'%':'N/A', pct:Math.round(Math.max(homSPp.k9,awySPp.k9)*100)},
+    {n:'SP xwOBA vs / Hard Hit%', v:(function(){var sp=(homSPp.overall>awySPp.overall?homSPp:awySPp).savant;return sp?(sp.xwoba_vs||'--')+' / '+(sp.hard_hit_vs||'--')+'%':'N/A';})(), pct:Math.round(Math.max((homSPp.svContactQuality||0),(awySPp.svContactQuality||0))*100)},
+    {n:'SP Exit Velocity vs', v:(function(){var sp=(homSPp.overall>awySPp.overall?homSPp:awySPp).savant;return sp&&sp.ev_vs?sp.ev_vs.toFixed(1)+' mph':'N/A';})(), pct:Math.round(Math.max((homSPp.svEV||0.5),(awySPp.svEV||0.5))*100)}
   ];
 
   // ── OVER/UNDER ──────────────────────────────────────────────────
@@ -2003,16 +2040,20 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var offQuality  = (awyOffp.overall + homOffp.overall) / 2; // higher = over lean
   var bpQuality   = (awyBPp.overall + homBPp.overall) / 2;   // lower = over lean (bad pen = more runs)
   // Raw run environment 0-1 where 0.5 = neutral
+  // OU: Contact quality (hard hit%, EV, xwOBA) is the best run environment predictor
+  // Savant contact quality directly feeds into spQuality via the blended awySPp/homSPp
+  // Hard hit% and EV are already in spPercents.svHardHit/svEV from the blend above
+  // Park and weather matter more for totals than for ML
   var ouRaw = 0.50
-    + (offQuality - 0.50) * 0.25      // good offenses → over
-    - (spQuality - 0.50) * 0.28       // good SPs → under
-    - (bpQuality - 0.50) * 0.18       // good bullpens → under
-    + envBoost * 0.15                  // park + weather
-    + umpRunAdj * 0.04;                // ump tendency
+    - (spQuality - 0.50) * 0.35       // SP quality → under (strongest signal)
+    + (offQuality - 0.50) * 0.30      // offense quality → over
+    + envBoost * 0.25                  // park + weather (more weight — reliable)
+    + umpRunAdj * 0.10;                // ump run tendency
   ouRaw = Math.max(0.22, Math.min(0.78, ouRaw));
+  if (Math.abs(ouRaw - 0.50) < 0.06) ouRaw = 0.50;
   var ouFavorOver = ouRaw >= 0.50;
   var ouDev = Math.abs(ouRaw - 0.50);
-  var ouScore = Math.round(50 + ouDev * 142);
+  var ouScore = Math.round(50 + ouDev * 130); // tightened
   ouScore = Math.min(92, Math.max(25, ouScore));
   var ouPlay  = ouFavorOver ? 'OVER' : 'UNDER';
   var ouEdge  = parseFloat(Math.abs(ouRaw - 0.50) * 22).toFixed(1);
@@ -2081,7 +2122,7 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // Use same deviation formula as ML/OU for consistency
   // 50 = neutral, deviation * 142 = score spread
   var nrfiDev = Math.abs(nrfiRaw - 0.50);
-  var nrfiScore = Math.round(50 + nrfiDev * 142);
+  var nrfiScore = Math.round(50 + nrfiDev * 130); // tightened
   nrfiScore = Math.min(84, Math.max(25, nrfiScore)); // NRFI capped at 84 — high variance
   // NRFI when run environment suppressed, YRFI when elevated
   var nrfiPlay  = nrfiRaw >= 0.50 ? 'NRFI' : 'YRFI';
@@ -2122,11 +2163,15 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
     var breakFactor = koArsenal.br_pct  ? (koArsenal.br_pct - 25) / 25 * 0.03 : 0;      // +0.03 for heavy breaking usage
     arsenalBoost = Math.max(-0.08, Math.min(0.10, veloFactor + spinFactor + breakFactor));
   }
-  // Savant whiff% factor: directly predicts swing-and-miss
+  // Savant contact suppression: use hard_hit%, EV against + whiff% for KO model
+  // These are the most direct predictors of strikeout props
   var savantWhiffFactor = 0.0;
-  if (koSavant && koSavant.whiff) {
-    savantWhiffFactor = (koSavant.whiff/100 - 0.25) / 0.06 * 0.05; // +0.05 per 6% above avg whiff
-    savantWhiffFactor = Math.max(-0.06, Math.min(0.08, savantWhiffFactor));
+  if (koSavant) {
+    // Whiff% — primary swing-and-miss predictor
+    var whiffBoost = koSavant.whiff ? (koSavant.whiff/100 - 0.25) / 0.06 * 0.05 : 0;
+    // Hard hit% suppression — soft contact pitchers get more weak outs = fewer deep counts = fewer Ks
+    var hardHitPenalty = koSavant.hard_hit_vs ? (0.38 - koSavant.hard_hit_vs/100) / 0.06 * 0.02 : 0;
+    savantWhiffFactor = Math.max(-0.07, Math.min(0.09, whiffBoost + hardHitPenalty));
   }
 
   var koRaw = 0.50
@@ -2142,13 +2187,16 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // koRaw > 0.50 = over favored, koRaw < 0.50 = under favored
   var koIsOver = koRaw >= 0.50;
   var koDev = Math.abs(koRaw - 0.50);
-  var koScore = Math.round(50 + koDev * 142);
+  var koScore = Math.round(50 + koDev * 130); // tightened
   koScore = Math.min(92, Math.max(25, koScore));
   var koLine  = spForKO ? (Math.round(spForKO.kPer9 / 9 * expIP * 2) / 2).toFixed(1) : '6.5';
   // Over: pitcher likely to exceed line. Under: contact pitcher, low-K environment
   var koPlay  = koIsOver
     ? koSpName + ' o' + koLine + ' Ks'
     : koSpName + ' u' + koLine + ' Ks';
+  // KO overs historically weak (40% win rate) — require higher confidence
+  // Raise effective LEAN floor for KO overs to 70 by suppressing lower scores
+  if (koIsOver && koScore < 70) koScore = Math.min(koScore, 61); // push below LEAN
   // For under, invert score so it reads correctly (higher = more confident in under)
   if (!koIsOver) {
     koScore = Math.round(50 + koDev * 142);
@@ -2167,8 +2215,11 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   ];
 
   // ── CONFIDENCE + CORRELATION FLAGS ──────────────────────────────
-  // Global confidence thresholds — raised to 82 to reduce false STRONG signals
-  function conf(s) { return s>=82?'STRONG':s>=62?'LEAN':'SKIP'; }
+  // Thresholds calibrated from season data:
+  // STRONG=86+ (historically 85-89 was 0% — raise the bar)
+  // LEAN=65+ for NRFI/OU, 68+ for ML/KO (tighter due to juice drag)
+  function conf(s) { return s>=86?'STRONG':s>=65?'LEAN':'SKIP'; }
+  function confML(s) { return s>=86?'STRONG':s>=68?'LEAN':'SKIP'; }
   // NRFI has higher threshold — too volatile for standard STRONG
   function confNrfi(s) { return s>=86?'STRONG':s>=65?'LEAN':'SKIP'; }
   function edgeVal(s) { return parseFloat((s/100*14-4).toFixed(1)); }
@@ -2193,10 +2244,10 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   koScore   = Math.round(50 + (koScore   - 50) * getRecalMultiplier('ko',   koScore));
 
   return {
-    ml:   {score:mlScore,   play:mlPlay,   edge:parseFloat(mlEdge),  conf:conf(mlScore),  factors:mlFactors},
+    ml:   {score:mlScore,   play:mlPlay,   edge:parseFloat(mlEdge),  conf:confML(mlScore),  factors:mlFactors},
     ou:   {score:ouScore,   play:ouPlay,   edge:parseFloat(ouEdge),  conf:conf(ouScore),  factors:ouFactors},
     nrfi: {score:nrfiScore, play:nrfiPlay, edge:parseFloat(nrfiEdge),conf:confNrfi(nrfiScore),factors:nrfiFactors},
-    ko:   {score:koScore,   play:koPlay,   edge:parseFloat(koEdge),  conf:conf(koScore),  factors:koFactors},
+    ko:   {score:koScore,   play:koPlay,   edge:parseFloat(koEdge),  conf:confML(koScore),  factors:koFactors},
     flags: {
       spElite: spElite,
       badBP:   badBP,
