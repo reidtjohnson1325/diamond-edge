@@ -1930,18 +1930,28 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // Lineup-aware offense quality using Savant hitter xwOBA
   var getLineupOffQuality = function(lineup, fallbackOffP) {
     if (!lineup || lineup.length < 3) return fallbackOffP;
-    var xwobas = lineup.slice(0, 9).map(function(b) {
-      // Try by ID first (API lineup), then by name (Rotowire paste)
+    var savantData = lineup.slice(0, 9).map(function(b) {
       var sv = b.id ? getSavantHitter(b.id) : null;
       if (!sv && b.name) sv = getSavantHitterByName(b.name);
-      return sv && sv.xwoba ? sv.xwoba : null;
+      return sv || null;
     }).filter(Boolean);
-    if (xwobas.length < 3) return fallbackOffP; // not enough Savant coverage
-    var avgXwoba = xwobas.reduce(function(a,b){return a+b;},0) / xwobas.length;
-    // Blend: 50% Savant lineup xwOBA, 50% team stats
+    if (savantData.length < 3) return fallbackOffP;
+    // xwOBA: expected offensive value — best overall hitter quality metric
+    var xwobas = savantData.map(function(sv){ return sv.xwoba||null; }).filter(Boolean);
+    var avgXwoba = xwobas.length ? xwobas.reduce(function(a,b){return a+b},0)/xwobas.length : 0.320;
     var savantOffPct = pct(avgXwoba, 0.320, 0.035, true);
+    // barrel_pct: hard power contact — drives extra-base hits and run scoring
+    var barrels = savantData.map(function(sv){ return sv.barrel_pct!=null?sv.barrel_pct:null; }).filter(function(v){return v!=null;});
+    var avgBarrel = barrels.length ? barrels.reduce(function(a,b){return a+b},0)/barrels.length : 8.0;
+    var savantBarrelPct = pct(avgBarrel/100, 0.08, 0.03, true);
+    // hard_hit: consistent hard contact correlates strongly with runs scored
+    var hardHits = savantData.map(function(sv){ return sv.hard_hit!=null?sv.hard_hit:null; }).filter(function(v){return v!=null;});
+    var avgHardHit = hardHits.length ? hardHits.reduce(function(a,b){return a+b},0)/hardHits.length : 38.0;
+    var savantHardHitPct = pct(avgHardHit/100, 0.38, 0.06, true);
+    // Composite hitter quality: xwOBA 50%, barrel% 30%, hard hit% 20%
+    var compositeOff = savantOffPct * 0.50 + savantBarrelPct * 0.30 + savantHardHitPct * 0.20;
     return {
-      overall: fallbackOffP.overall * 0.50 + savantOffPct * 0.50,
+      overall: fallbackOffP.overall * 0.50 + compositeOff * 0.50,
       ops: fallbackOffP.ops,
       kpct: fallbackOffP.kpct,
       bbpct: fallbackOffP.bbpct,
@@ -2036,7 +2046,12 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
 
   // ── OVER/UNDER ──────────────────────────────────────────────────
   // Weights: SP quality 28%, Offense 25%, Bullpen 18%, Park+Weather 19%, Context 10%
-  var spQuality   = (awySPp.overall + homSPp.overall) / 2;  // higher = under lean
+  // SP quality for OU: blend overall quality + K rate + contact quality
+  // High K rate = fewer balls in play = fewer runs = under signal
+  // Low contact quality (hard hit%, EV) = weaker contact = fewer runs = under signal
+  var awySpOU = awySPp.overall * 0.5 + awySPp.k9 * 0.3 + (awySPp.svContactQuality||awySPp.overall) * 0.2;
+  var homSpOU = homSPp.overall * 0.5 + homSPp.k9 * 0.3 + (homSPp.svContactQuality||homSPp.overall) * 0.2;
+  var spQuality   = (awySpOU + homSpOU) / 2;  // higher = under lean
   var offQuality  = (awyOffp.overall + homOffp.overall) / 2; // higher = over lean
   var bpQuality   = (awyBPp.overall + homBPp.overall) / 2;   // lower = over lean (bad pen = more runs)
   // Raw run environment 0-1 where 0.5 = neutral
@@ -2079,6 +2094,14 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var homFI_era = homFI ? pct(homFI.era,  FINN_ERA_AVG, 1.20, false) : homSPp.era * 0.8 + 0.10;
   var awFI_bb   = awyFI ? pct(awyFI.bbpct, 0.08, 0.04, false) : awySPp.bb9;
   var homFI_bb  = homFI ? pct(homFI.bbpct, 0.08, 0.04, false) : homSPp.bb9;
+  // Boost BB concern if top-of-order lineup is patient (high BB%) — walk rate amplifier
+  // Savant hitter bb_pct: high = lineup draws walks = more baserunners = YRFI risk
+  var awyLineupBB = (game.awayLineup && game.awayLineup.length >= 3)
+    ? (function(){ var bbs=game.awayLineup.slice(0,3).map(function(b){ var sv=b.id?getSavantHitter(b.id):null; if(!sv&&b.name)sv=getSavantHitterByName(b.name); return sv&&sv.bb_pct?sv.bb_pct:null; }).filter(function(v){return v!=null;}); return bbs.length?bbs.reduce(function(a,b){return a+b},0)/bbs.length:null; })()
+    : null;
+  // If top-3 hitters draw lots of walks (bb_pct > 10%), reduce BB edge for NRFI
+  var awBBamp = awyLineupBB && awyLineupBB > 10 ? pct(awyLineupBB/100, 0.085, 0.03, false) - 0.50 : 0;
+  var homBBamp = 0; // similar logic could apply home side
   // Top-3 suppression: high SP K% vs low offense OBP = NRFI friendly
   // If confirmed lineup available, use top-3 batters' quality instead of full team avg
   // Top-of-order hitters are typically higher OBP — using full team avg understates risk
@@ -2098,8 +2121,18 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // awySuppress/homSuppress: how much each SP suppresses first-inning scoring
   // k9 percentile near 1.0 = great K pitcher = better suppression
   // top3q near 0.0 = weak top of order = better suppression
-  var awySuppress = (awySPp.k9 - 0.50) * 0.6 + (0.50 - awyTop3q) * 0.4;
-  var homSuppress = (homSPp.k9 - 0.50) * 0.6 + (0.50 - homTop3q) * 0.4;
+  // NRFI suppression: blend K quality (swing-miss) + contact quality (hard hit/EV/xwOBA)
+  // K quality = prevents baserunners via strikeout
+  // Contact quality = prevents baserunners via weak contact, grounders, soft fly balls
+  var awyKQ   = (awySPp.k9 - 0.50);
+  var homKQ   = (homSPp.k9 - 0.50);
+  var awyCQ   = awySPp.svContactQuality != null ? (awySPp.svContactQuality - 0.50) : awyKQ * 0.7;
+  var homCQ   = homSPp.svContactQuality != null ? (homSPp.svContactQuality - 0.50) : homKQ * 0.7;
+  // Suppress = 50% K quality + 50% contact quality vs top-3 hitter quality
+  var aSuppressQ = (awyKQ * 0.50 + awyCQ * 0.50) * 0.6 + (0.50 - awyTop3q) * 0.4;
+  var hSuppressQ = (homKQ * 0.50 + homCQ * 0.50) * 0.6 + (0.50 - homTop3q) * 0.4;
+  var awySuppress = aSuppressQ;
+  var homSuppress = hSuppressQ;
   var avgSuppress = (awySuppress + homSuppress) / 2; // range ~-0.50 to +0.50
 
   // First-inning ERA: lower ERA = better NRFI. awFI_era is a percentile (higher = better ERA)
@@ -2158,10 +2191,17 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // League avg fb_velo ~93.5, spin ~2200 — scale accordingly
   var arsenalBoost = 0.0;
   if (koArsenal) {
-    var veloFactor  = koArsenal.fb_velo ? (koArsenal.fb_velo - 93.5) / 4.0 * 0.06 : 0; // +0.06 per 4mph above avg
-    var spinFactor  = koArsenal.fb_spin ? (koArsenal.fb_spin - 2200) / 300 * 0.04 : 0;  // +0.04 per 300rpm above avg
-    var breakFactor = koArsenal.br_pct  ? (koArsenal.br_pct - 25) / 25 * 0.03 : 0;      // +0.03 for heavy breaking usage
-    arsenalBoost = Math.max(-0.08, Math.min(0.10, veloFactor + spinFactor + breakFactor));
+    // Fastball: high velo = harder to catch up = more Ks
+    var veloFactor  = koArsenal.fb_velo ? (koArsenal.fb_velo - 93.5) / 4.0 * 0.05 : 0;
+    // Fastball spin: high spin = more rise = more swing-under = more Ks
+    var spinFactor  = koArsenal.fb_spin ? (koArsenal.fb_spin - 2200) / 300 * 0.03 : 0;
+    // Breaking ball usage %: heavy breaker usage = more chases = more Ks
+    var breakFactor = koArsenal.br_pct  ? (koArsenal.br_pct - 25) / 25 * 0.025 : 0;
+    // Breaking ball spin: high spin curve/slider = more movement = harder to make contact
+    var brSpinFactor = koArsenal.br_spin ? (koArsenal.br_spin - 2400) / 300 * 0.025 : 0;
+    // Offspeed % (changeup/splitter): neutralizes same-side hitters, induces chase
+    var osFactor    = koArsenal.os_pct  ? (koArsenal.os_pct - 12) / 12 * 0.02 : 0;
+    arsenalBoost = Math.max(-0.08, Math.min(0.12, veloFactor + spinFactor + breakFactor + brSpinFactor + osFactor));
   }
   // Savant contact suppression: use hard_hit%, EV against + whiff% for KO model
   // These are the most direct predictors of strikeout props
