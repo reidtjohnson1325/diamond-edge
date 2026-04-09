@@ -1374,10 +1374,14 @@ async function fetchTeamStats(teamId) {
   var gp = cur.gp;
   var blendStat = function(c, p, r) { return (c * gp + p * r) / (gp + r); };
 
+  var rpg = parseFloat(blendStat(cur.runsPerGame || cur.runs/Math.max(1,cur.gp),
+                                   prev.runsPerGame || prev.runs/Math.max(1,prev.gp), R_AVG).toFixed(3));
+
   return {
     avg:  parseFloat(blendStat(cur.avg,   prev.avg,   R_AVG).toFixed(3)),
     obp:  parseFloat(blendStat(cur.obp,   prev.obp,   R_AVG).toFixed(3)),
     slg:  parseFloat(blendStat(cur.slg,   prev.slg,   R_POWER).toFixed(3)),
+    runsPerGame: rpg,
     ops:  parseFloat(blendStat(cur.ops,   prev.ops,   R_AVG).toFixed(3)),
     woba: parseFloat((blendStat(cur.obp,prev.obp,R_AVG)*0.9+blendStat(cur.slg,prev.slg,R_POWER)*0.3).toFixed(3)),
     kpct: parseFloat(blendStat(cur.kpct,  prev.kpct,  R_RATE).toFixed(3)),
@@ -1518,6 +1522,43 @@ async function fetchBullpenStats(teamId) {
     whip: parseFloat(blendBP(cur.whip, prev.whip, R_BP_WHIP).toFixed(2)),
     ip: cur.ip
   };
+}
+
+// Standings cache: teamId -> {rs, ra, pythagorean, wins, losses}
+var STANDINGS_CACHE = {};
+var STANDINGS_LOADED = false;
+
+async function loadStandings() {
+  if (STANDINGS_LOADED) return;
+  try {
+    var year = new Date().getFullYear();
+    var data = await fetchJSON(CFG.MLB_BASE + '/standings?leagueId=103,104&season=' + year +
+        '&standingsTypes=regularSeason&hydrate=team,record');
+    (data.records || []).forEach(function(div) {
+      (div.teamRecords || []).forEach(function(t) {
+        var rs = t.runsScored || 0;
+        var ra = t.runsAllowed || 0;
+        var g = (t.wins || 0) + (t.losses || 0);
+        var pyth = (rs > 0 && ra > 0)
+          ? Math.pow(rs, 1.83) / (Math.pow(rs, 1.83) + Math.pow(ra, 1.83))
+          : 0.500;
+        if (t.team && t.team.id) {
+          STANDINGS_CACHE[t.team.id] = {
+            rs: rs, ra: ra, g: g,
+            rpg: g > 0 ? rs/g : 4.5,
+            rapg: g > 0 ? ra/g : 4.5,
+            pythagorean: parseFloat(pyth.toFixed(3)),
+            wins: t.wins || 0, losses: t.losses || 0
+          };
+        }
+      });
+    });
+    STANDINGS_LOADED = true;
+  } catch(e) { STANDINGS_LOADED = true; } // fail silently
+}
+
+function getPythagorean(teamId) {
+  return STANDINGS_CACHE[teamId] || null;
 }
 
 async function fetchRecentGameLog(teamId) {
@@ -1904,11 +1945,20 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
 
     return {
       // Overall: 50% contact quality + 50% K quality (when available), else fall back
-      overall: contactQuality && koQuality
-        ? spPercents.overall * MLB_WT + ((contactQuality * 0.6 + koQuality * 0.4)) * SAVANT_WT
-        : contactQuality
-          ? spPercents.overall * MLB_WT + contactQuality * SAVANT_WT
-          : spPercents.overall,
+      // SIERA approximation: high K rate + good contact suppression compound each other
+      // Research shows K% and BABIP/contact quality correlate — high K pitchers also induce weaker contact
+      // We capture this by giving a bonus when BOTH koQuality AND contactQuality are elite
+      overall: (function() {
+        if (!contactQuality && !koQuality) return spPercents.overall;
+        var savantComponent = contactQuality && koQuality
+          ? (contactQuality * 0.6 + koQuality * 0.4)
+          : (contactQuality || koQuality);
+        // SIERA interaction: if both K quality and contact quality are above avg, compound the benefit
+        var sieraBoost = (koQuality && koQuality > 0.65 && contactQuality && contactQuality > 0.65)
+          ? (koQuality - 0.65) * (contactQuality - 0.65) * 0.5 // small compounding bonus
+          : 0;
+        return spPercents.overall * MLB_WT + Math.min(1.0, savantComponent + sieraBoost) * SAVANT_WT;
+      })(),
       k9:      koQuality ? spPercents.k9  * MLB_WT + koQuality  * SAVANT_WT : spPercents.k9,
       kbb:     spPercents.kbb,
       bb9:     spPercents.bb9,
@@ -2001,6 +2051,25 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var awyRunDiffP = awyLog ? pct(awyLog.runDiff, 0, 15, true) : 0.50;
   var homRunDiffP = homLog ? pct(homLog.runDiff, 0, 15, true) : 0.50;
 
+  // ── PYTHAGOREAN WIN EXPECTATION ──────────────────────────────────
+  // Strongest single ML predictor per academic research (Towar Data Science ML study)
+  // Identifies teams outperforming/underperforming their run differential
+  // Formula: RS^1.83 / (RS^1.83 + RA^1.83), optimal exponent 1.83 per Jay Huemann
+  var calcPythagorean = function(teamStats, bpData) {
+    if (!teamStats || !teamStats.runsPerGame) return 0.50;
+    var rs = teamStats.runsPerGame;
+    // Derive RA from bullpen/pitching ERA — use park-neutral estimate
+    // If BP ERA available, blend SP ERA (from league avg ~4.10) with team BP
+    var raEstimate = rs * 0.92 + 0.15; // league-avg teams allow ~92% of RS + small constant
+    if (bpData && bpData.era) {
+      // Translate ERA to runs allowed per game (SP + BP contribution)
+      raEstimate = bpData.era * 0.40 + 4.10 * 0.60; // BP 40% of innings, SP rest
+    }
+    var exp = 1.83;
+    var rsPow = Math.pow(rs, exp);
+    var raPow = Math.pow(raEstimate, exp);
+    return rsPow / (rsPow + raPow);
+  };
   // ── MONEYLINE ──────────────────────────────────────────────────
   // Home team perspective — score > 50 means home team favored
   // Weights rebuilt from factor analysis:
@@ -2014,11 +2083,21 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var awyBPgames = awyLog ? (awyLog.last7W + awyLog.last7L) : 0;
   var homBPera_p = homBPgames >= 7 ? pct(homBP ? homBP.era : 4.20, 4.20, 0.60, false) : 0.50;
   var awyBPera_p = awyBPgames >= 7 ? pct(awyBP ? awyBP.era : 4.20, 4.20, 0.60, false) : 0.50;
-  var mlSPedge   = (homSPp.overall - awySPp.overall) * 0.45;
-  var mlBPedge   = (homBPera_p - awyBPera_p) * 0.15;
-  var mlOffEdge  = (homOffp.overall - awyOffp.overall) * 0.30;
-  var mlContext  = 0.04 + umpRunAdj * 0.02; // home field + ump
-  var mlRaw = 0.50 + mlSPedge + mlBPedge + mlOffEdge + mlContext;
+  // Pythagorean expectation: true team strength from RS/RA (strips cluster luck)
+  // More predictive than W-L especially early season (few games = small sample W-L)
+  var homPyth = game.homeTeamId ? getPythagorean(game.homeTeamId) : null;
+  var awyPyth = game.awayTeamId ? getPythagorean(game.awayTeamId) : null;
+  var homPythP = homPyth && homPyth.g >= 5 ? homPyth.pythagorean : 0.500;
+  var awyPythP = awyPyth && awyPyth.g >= 5 ? awyPyth.pythagorean : 0.500;
+  var mlPythEdge = (homPythP - awyPythP) * 0.10; // 10% weight — stabilizing signal
+  // Divisional games: public overvalues favorites in division matchups → reduce edge slightly
+  var isDivisional = homeData.divisionId && awayData.divisionId && homeData.divisionId === awayData.divisionId;
+  var divAdj = isDivisional ? -0.01 : 0; // tighten edge in division games
+  var mlSPedge   = (homSPp.overall - awySPp.overall) * 0.42;
+  var mlBPedge   = (homBPera_p - awyBPera_p) * 0.13;
+  var mlOffEdge  = (homOffp.overall - awyOffp.overall) * 0.28;
+  var mlContext  = 0.04 + umpRunAdj * 0.02 + divAdj; // home field + ump + div adjustment
+  var mlRaw = 0.50 + mlSPedge + mlBPedge + mlOffEdge + mlPythEdge + mlContext;
   mlRaw = Math.max(0.22, Math.min(0.78, mlRaw));
   // Dead zone: if raw is within 0.06 of neutral (0.44-0.56), clamp score to SKIP
   // These plays have no real conviction — model is basically saying coin flip
@@ -2039,6 +2118,7 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
     {n:'Platoon matchup', v:awyPlat||homPlat?'Applied':'Neutral', pct:Math.round(Math.max(awyOffp.overall,homOffp.overall)*100)},
     {n:'Bullpen ERA', v:(homBPera_p>awyBPera_p?homBP:awyBP)?((homBPera_p>awyBPera_p?homBP:awyBP).era||4.2).toFixed(2)+' ERA':(Math.max(homBPgames,awyBPgames)<7?'< 7 games (neutral)':'N/A'), pct:Math.round(Math.max(homBPera_p,awyBPera_p)*100)},
     {n:'Home field + ump', v:'+0.04 base'+(umpRunAdj!==0?' | Ump '+(umpRunAdj>0?'+':'')+ump.runAdj.toFixed(1)+'/g':''), pct:54},
+    {n:'Pythagorean win% edge', v:(function(){ var h=homPythP.toFixed(3); var a=awyPythP.toFixed(3); return (homPythP>awyPythP?'HM ':awyPythP>homPythP?'AW ':'')+Math.max(homPythP,awyPythP).toFixed(3)+' vs '+Math.min(homPythP,awyPythP).toFixed(3); })(), pct:Math.round(Math.max(homPythP,awyPythP)*100)},
     {n:'SP Savant K%', v:(homSPp.overall>awySPp.overall?homSPp:awySPp).savant?((homSPp.overall>awySPp.overall?homSPp:awySPp).savant.k_pct||'--')+'%':'N/A', pct:Math.round(Math.max(homSPp.k9,awySPp.k9)*100)},
     {n:'SP xwOBA vs / Hard Hit%', v:(function(){var sp=(homSPp.overall>awySPp.overall?homSPp:awySPp).savant;return sp?(sp.xwoba_vs||'--')+' / '+(sp.hard_hit_vs||'--')+'%':'N/A';})(), pct:Math.round(Math.max((homSPp.svContactQuality||0),(awySPp.svContactQuality||0))*100)},
     {n:'SP Exit Velocity vs', v:(function(){var sp=(homSPp.overall>awySPp.overall?homSPp:awySPp).savant;return sp&&sp.ev_vs?sp.ev_vs.toFixed(1)+' mph':'N/A';})(), pct:Math.round(Math.max((homSPp.svEV||0.5),(awySPp.svEV||0.5))*100)}
@@ -2458,6 +2538,8 @@ function buildGameFromAPI(g, wx) {
     gameState: (g.status && g.status.abstractGameState) || 'Preview',
     detailedState: (g.status && g.status.detailedState) || 'Scheduled',
     currentInning: (g.linescore && g.linescore.currentInning) || 0,
+    awayTeamId: awayTeam && awayTeam.id,
+    homeTeamId: homeTeam && homeTeam.id,
     awayTeamId: awayTeamId, homeTeamId: homeTeamId,
     awayPitcherId: awayPitcher.id, homePitcherId: homePitcher.id,
     awayP: awayPitcher.fullName||'TBD', awayH: KNOWN_LHP[awayPitcher.id] || 'R',
@@ -2900,6 +2982,7 @@ async function loadAll() {
       });
     });
 
+    loadStandings(); // Pythagorean standings — loads in background
     Promise.all(scorePromises).then(function() {
       renderAll();
       if (scoreBadge) { scoreBadge.textContent = 'BvP loading...'; }
