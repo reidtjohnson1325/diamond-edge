@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026</title>
+<title>Diamond Edge — MLB 2026 [v20260410-1542]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2036,8 +2036,8 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
     };
   };
   // Blend if we have pitcher IDs
-  if (game.awayPitcherId) awySPp = blendSavantSP(awySPp, game.awayPitcherId, game.awayPitcherName);
-  if (game.homePitcherId) homSPp = blendSavantSP(homSPp, game.homePitcherId, game.homePitcherName);
+  if (game.awayPitcherId) awySPp = blendSavantSP(awySPp, game.awayPitcherId, game.awayP);
+  if (game.homePitcherId) homSPp = blendSavantSP(homSPp, game.homePitcherId, game.homeP);
 
   // Lineup-aware offense quality using Savant hitter xwOBA
   var getLineupOffQuality = function(lineup, fallbackOffP) {
@@ -2192,8 +2192,8 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // High K rate = fewer balls in play = fewer runs = under signal
   // Low contact quality (hard hit%, EV) = weaker contact = fewer runs = under signal
   // LD% penalty in OU: high line drive rate = more hits regardless of K rate
-  var awyBBou = game.awayPitcherName ? getBattedBall(game.awayPitcherName) : null;
-  var homBBou = game.homePitcherName ? getBattedBall(game.homePitcherName) : null;
+  var awyBBou = game.awayP ? getBattedBall(game.awayP) : null;
+  var homBBou = game.homeP ? getBattedBall(game.homeP) : null;
   var awyLDpen = awyBBou && awyBBou.ld ? -(awyBBou.ld - 0.20) / 0.04 * 0.03 : 0;
   var homLDpen = homBBou && homBBou.ld ? -(homBBou.ld - 0.20) / 0.04 * 0.03 : 0;
   var awySpOU = awySPp.overall * 0.5 + awySPp.k9 * 0.3 + (awySPp.svContactQuality||awySPp.overall) * 0.2 + awyLDpen;
@@ -2237,6 +2237,7 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // spFinnEra baseline: first-inning ERA tends to be ~4.0-4.2 for average starters
   // Using 4.10 so average pitchers score near 0.50 (neutral)
   var FINN_ERA_AVG = 4.10;
+  var BUILD_VERSION = "v20260410-1542"; // check this to verify correct file is deployed
   var awFI_era  = awyFI ? pct(awyFI.era,  FINN_ERA_AVG, 1.20, false) : awySPp.era * 0.8 + 0.10;
   var homFI_era = homFI ? pct(homFI.era,  FINN_ERA_AVG, 1.20, false) : homSPp.era * 0.8 + 0.10;
   var awFI_bb   = awyFI ? pct(awyFI.bbpct, 0.08, 0.04, false) : awySPp.bb9;
@@ -2245,8 +2246,8 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // === NRFI HISTORY — #1 most predictive signal (OddlySpecificStats 2025) ===
   // Historical first-inning NRFI% directly measures what we're betting
   // Weight increases with sample size (unreliable below 10 GS)
-  var awyNRFIhist = game.awayPitcherName ? getNRFIHistory(game.awayPitcherName) : null;
-  var homNRFIhist = game.homePitcherName ? getNRFIHistory(game.homePitcherName) : null;
+  var awyNRFIhist = game.awayP ? getNRFIHistory(game.awayP) : null;
+  var homNRFIhist = game.homeP ? getNRFIHistory(game.homeP) : null;
   var awyHistRate = awyNRFIhist && awyNRFIhist.gs >= 10 ? awyNRFIhist.nrfi : null;
   var homHistRate = homNRFIhist && homNRFIhist.gs >= 10 ? homNRFIhist.nrfi : null;
   // Weight scales with sample size: 10 GS = 15%, 20 GS = 25%, 30+ GS = 35%
@@ -2285,8 +2286,8 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var awyKQ   = (awySPp.k9 - 0.50);
   var homKQ   = (homSPp.k9 - 0.50);
   // Include batted ball GB% as NRFI suppressor: extreme GB pitchers rarely give up 1st-inn HRs
-  var awyBB = game.awayPitcherName ? getBattedBall(game.awayPitcherName) : null;
-  var homBB = game.homePitcherName ? getBattedBall(game.homePitcherName) : null;
+  var awyBB = game.awayP ? getBattedBall(game.awayP) : null;
+  var homBB = game.homeP ? getBattedBall(game.homeP) : null;
   var awyGBbonus = awyBB && awyBB.gb_fb > 1.5 ? (awyBB.gb_fb - 1.5) * 0.08 : 0; // max ~0.10 for extreme GBers
   var homGBbonus = homBB && homBB.gb_fb > 1.5 ? (homBB.gb_fb - 1.5) * 0.08 : 0;
   var awyCQ   = (awySPp.svContactQuality != null ? (awySPp.svContactQuality - 0.50) : awyKQ * 0.7) + awyGBbonus;
