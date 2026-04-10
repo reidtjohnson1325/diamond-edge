@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260410-1542]</title>
+<title>Diamond Edge — MLB 2026 [v20260410-1553]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -415,6 +415,10 @@ tr.dr:hover td{background:rgba(255,255,255,.02);cursor:pointer}
     <div class="tc"><div class="tclb">Total ROI</div><div class="tcvl" id="trk-roi" style="color:var(--dm)">--</div><div class="tcsb">Units profit / loss</div></div>
     <div class="tc"><div class="tclb">Best bet type</div><div class="tcvl" id="trk-best" style="font-size:16px;color:var(--dm);margin-top:6px">--</div><div class="tcsb">Highest win rate</div></div>
     <div class="tc"><div class="tclb">Strong play hit %</div><div class="tcvl" id="trk-strong" style="color:var(--dm)">--</div><div class="tcsb">STRONG confidence accuracy</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 12px;border-left:1px solid var(--br)">
+            <span style="font-size:9px;font-family:var(--fm);color:var(--mu);letter-spacing:0.05em;text-transform:uppercase">Skip Paper</span>
+            <span id="trk-skip" style="font-size:11px;font-weight:700;font-family:var(--fm);color:var(--mu)">--</span>
+          </div>
   </div>
 
   <!-- BY BET TYPE -->
@@ -1837,6 +1841,8 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
+var BUILD_VERSION = "v20260410-1553"; // type BUILD_VERSION in DevTools to verify deployed file
+
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
   // Approximate percentile using z-score → logistic
@@ -2237,7 +2243,6 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // spFinnEra baseline: first-inning ERA tends to be ~4.0-4.2 for average starters
   // Using 4.10 so average pitchers score near 0.50 (neutral)
   var FINN_ERA_AVG = 4.10;
-  var BUILD_VERSION = "v20260410-1542"; // check this to verify correct file is deployed
   var awFI_era  = awyFI ? pct(awyFI.era,  FINN_ERA_AVG, 1.20, false) : awySPp.era * 0.8 + 0.10;
   var homFI_era = homFI ? pct(homFI.era,  FINN_ERA_AVG, 1.20, false) : homSPp.era * 0.8 + 0.10;
   var awFI_bb   = awyFI ? pct(awyFI.bbpct, 0.08, 0.04, false) : awySPp.bb9;
@@ -2251,8 +2256,11 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var awyHistRate = awyNRFIhist && awyNRFIhist.gs >= 10 ? awyNRFIhist.nrfi : null;
   var homHistRate = homNRFIhist && homNRFIhist.gs >= 10 ? homNRFIhist.nrfi : null;
   // Weight scales with sample size: 10 GS = 15%, 20 GS = 25%, 30+ GS = 35%
-  var awyHistWt = awyHistRate != null ? Math.min(0.35, (awyNRFIhist.gs / 30) * 0.35) : 0;
-  var homHistWt = homHistRate != null ? Math.min(0.35, (homNRFIhist.gs / 30) * 0.35) : 0;
+  // History weight: scales 15%→45% from 10→30+ GS
+  // At 30 GS, direct NRFI history deserves near-equal weight to model factors
+  // (it's literally measuring the same thing we're betting)
+  var awyHistWt = awyHistRate != null ? Math.min(0.45, Math.max(0.15, (awyNRFIhist.gs / 30) * 0.45)) : 0;
+  var homHistWt = homHistRate != null ? Math.min(0.45, Math.max(0.15, (homNRFIhist.gs / 30) * 0.45)) : 0;
   // Boost BB concern if top-of-order lineup is patient (high BB%) — walk rate amplifier
   // Savant hitter bb_pct: high = lineup draws walks = more baserunners = YRFI risk
   var awyLineupBB = (game.awayLineup && game.awayLineup.length >= 3)
@@ -2324,9 +2332,11 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   nrfiRaw = Math.max(0.22, Math.min(0.88, nrfiRaw));
   // Use same deviation formula as ML/OU for consistency
   // 50 = neutral, deviation * 142 = score spread
-  var nrfiDev = Math.abs(nrfiRaw - 0.50);
-  var nrfiScore = Math.round(50 + nrfiDev * 130); // tightened
-  nrfiScore = Math.min(84, Math.max(25, nrfiScore)); // NRFI capped at 84 — high variance
+  // NRFI uses SIGNED deviation (not abs) so NRFI and YRFI both score properly
+  // Multiplier 150 (vs 130 for ML/OU): history data is a direct measurement = less noise
+  var nrfiDev = nrfiRaw - 0.50;
+  var nrfiScore = Math.round(50 + Math.abs(nrfiDev) * 150);
+  nrfiScore = Math.min(95, Math.max(25, nrfiScore));
   // NRFI when run environment suppressed, YRFI when elevated
   var nrfiPlay  = nrfiRaw >= 0.50 ? 'NRFI' : 'YRFI';
   var nrfiEdge  = parseFloat(nrfiDev * 20).toFixed(1);
@@ -3921,12 +3931,14 @@ function renderTodayPicker() {
   var dateEl = document.getElementById('trk-date');
   if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
 
-  var plays = allPlays().filter(function(p) { return p.conf === 'STRONG' || p.conf === 'LEAN'; });
+  var allPlaysList = allPlays();
+  var plays = allPlaysList.filter(function(p) { return p.conf === 'STRONG' || p.conf === 'LEAN'; });
+  var skipPlays = allPlaysList.filter(function(p) { return p.conf === 'SKIP'; });
   var list = document.getElementById('todayPlaysList');
   if (!list) return;
   list.innerHTML = '';
 
-  if (!plays.length) {
+  if (!plays.length && !skipPlays.length) {
     list.innerHTML = '<div style="padding:16px;font-size:11px;color:var(--mu);text-align:center">No plays loaded yet — refresh data first</div>';
     return;
   }
@@ -4079,6 +4091,55 @@ function renderTodayPicker() {
     }(row, playId, g.away+' @ '+g.home, p.type, p.play.replace(/['\"/]/g,''), p.score, p.conf));
     list.appendChild(row);
   });
+
+  // ── SKIP plays — paper tracking section ───────────────────────
+  if (skipPlays.length) {
+    var skipHeader = document.createElement('div');
+    skipHeader.style.cssText = 'padding:8px 12px 4px;font-size:10px;font-family:var(--fm);color:var(--mu);letter-spacing:0.08em;text-transform:uppercase;border-top:1px solid var(--br);margin-top:8px;display:flex;align-items:center;gap:6px';
+    skipHeader.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:var(--mu);display:inline-block;flex-shrink:0"></span>SKIP plays — paper track only (0 units)';
+    list.appendChild(skipHeader);
+    skipPlays.slice(0, 12).forEach(function(p, si) {
+      var g = p.game;
+      var playId = todayStr + '_' + g.id + '_' + p.tkey;
+      var logCount = alreadyLogged.filter(function(id) { return id === playId; }).length;
+      var displayType = p.type;
+      if (p.type === 'NRFI' && p.play && p.play.indexOf('YRFI') !== -1) displayType = 'YRFI';
+      if (p.type === 'KO'   && p.play && p.play.indexOf(' u')    !== -1) displayType = 'KU';
+      var tColor = {ML:'var(--bl)','O/U':'var(--pu)',NRFI:'var(--tl)',YRFI:'rgba(251,113,133,1)',KO:'var(--am)',KU:'var(--am)'}[displayType]||'var(--mu)';
+      var hasLine = p.type==='O/U'||p.type==='KO';
+      var linePH = p.type==='O/U'?'Total (7.5)':p.type==='KO'?'Ks (8.5)':'Line';
+      var badge = logCount>0?'<span style="font-family:var(--fm);font-size:9px;color:var(--mu);margin-right:4px">'+logCount+'✓</span>':'';
+      var safeMatchup = (g.away+' @ '+g.home).replace(/'/g,"\'");
+      var safePlay = p.play.replace(/'/g,'').replace(/"/g,'');
+      var skipRow = document.createElement('div');
+      skipRow.className = 'today-play-row';
+      skipRow.style.cssText = 'opacity:0.5';
+      skipRow.innerHTML =
+        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'+
+          '<span style="font-family:var(--fm);font-size:9px;padding:2px 5px;border-radius:3px;background:var(--s2);color:var(--mu)">'+p.score+'</span>'+
+          '<span style="font-family:var(--fm);font-size:9px;padding:2px 5px;border-radius:3px;background:'+tColor+'22;color:'+tColor+'">'+displayType+'</span>'+
+          '<div style="min-width:0;flex:1">'+
+            '<div style="font-size:11px;font-weight:600;color:var(--dm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+g.away+' @ '+g.home+'</div>'+
+            '<div style="font-size:10px;color:var(--mu)">'+p.play+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">'+
+          badge+
+          (hasLine?'<input placeholder="'+linePH+'" style="width:72px;font-size:10px;padding:3px 6px;border:1px solid var(--br);border-radius:4px;background:var(--s1);color:var(--tx)" id="skip-line-'+si+'" />':'')+
+          '<input placeholder="Odds" style="width:58px;font-size:10px;padding:3px 6px;border:1px solid var(--br);border-radius:4px;background:var(--s1);color:var(--tx)" id="skip-odds-'+si+'" />'+
+          '<button id="skip-btn-'+si+'" '+
+            'style="font-size:10px;padding:3px 8px;border-radius:4px;background:var(--s2);border:1px solid var(--br);color:var(--mu);cursor:pointer;font-family:var(--fm)">Track</button>'+
+        '</div>';
+      list.appendChild(skipRow);
+      // Wire button via addEventListener to avoid inline string escaping issues
+      (function(idx, pid, mtch, typ, ply, scr) {
+        var btn = document.getElementById('skip-btn-'+idx);
+        if (btn) btn.addEventListener('click', function() {
+          lockSkipPlay(idx, pid, mtch, typ, ply, scr, 'SKIP');
+        });
+      })(si, playId, g.away+' @ '+g.home, p.type, p.play, p.score);
+    });
+  }
 }
 
 function togglePlay(i, playId) {
@@ -4094,6 +4155,35 @@ function togglePlay(i, playId) {
   var selected = document.querySelectorAll('.tpr-check.checked').length;
   var el = document.getElementById('selected-count');
   if (el) el.textContent = selected + ' selected';
+}
+
+function lockSkipPlay(i, playId, matchup, type, play, score, conf) {
+  var lineEl = document.getElementById('skip-line-'+i);
+  var oddsEl = document.getElementById('skip-odds-'+i);
+  var line = lineEl ? lineEl.value.trim() : '';
+  var oddsVal = oddsEl ? oddsEl.value.trim() : '';
+  if (!oddsVal) { if(oddsEl) { oddsEl.style.borderColor='var(--rd)'; setTimeout(function(){oddsEl.style.borderColor='';},1500); } return; }
+  var todayStr = new Date().toISOString().slice(0,10);
+  BET_LOG.push({
+    id: Date.now(),
+    playId: playId + '_' + Date.now(),
+    date: todayStr,
+    matchup: matchup,
+    type: type,
+    play: play,
+    odds: oddsVal,
+    line: line || null,
+    units: 0, // 0 units = paper/shadow bet, no real money
+    score: score,
+    conf: 'SKIP',
+    result: '',
+    pl: null,
+    shadow: true // flag for display
+  });
+  saveBets();
+  renderTodayPicker();
+  renderBetLog();
+  updateTrackerStats();
 }
 
 function lockPlay(i, playId, matchup, type, play, score, conf) {
@@ -4271,6 +4361,21 @@ function updateTrackerStats() {
   if (roiEl) {
     roiEl.textContent = settled.length ? (totalPL >= 0 ? '+' : '') + totalPL.toFixed(2) + 'u' : '--';
     roiEl.style.color = totalPL > 0 ? 'var(--gn)' : totalPL < 0 ? 'var(--rd)' : 'var(--dm)';
+  }
+
+  // SKIP paper track stats
+  var skipBets = settled.filter(function(b) { return b.conf === 'SKIP' || b.shadow; });
+  var skipW = skipBets.filter(function(b) { return b.result === 'W'; }).length;
+  var skipL = skipBets.filter(function(b) { return b.result === 'L'; }).length;
+  var skipEl = document.getElementById('trk-skip');
+  if (skipEl) {
+    if (skipBets.length) {
+      skipEl.textContent = 'SKIP: ' + skipW + '-' + skipL + ' (' + Math.round(skipW / Math.max(1, skipW+skipL) * 100) + '%)';
+      skipEl.style.color = skipW > skipL ? 'var(--gn)' : skipW < skipL ? 'var(--rd)' : 'var(--mu)';
+    } else {
+      skipEl.textContent = 'SKIP: no data yet';
+      skipEl.style.color = 'var(--mu)';
+    }
   }
 
   // Best bet type
