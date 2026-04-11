@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260410-1553]</title>
+<title>Diamond Edge — MLB 2026 [v20260411-1521]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -1841,7 +1841,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260410-1553"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260411-1521"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2239,7 +2239,8 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
 
   // ── NRFI ────────────────────────────────────────────────────────
   // Only 1st inning: top-3 hitters vs starter, SP 1st-inn ERA, SP BB%, park
-  // Weights: SP 1st-inn 30%, Top-3 hitters 35%, SP BB% 12%, Park+wx 13%, BvP signal 10%
+  // Weights: History(direct) ~25%*, FI ERA 25%, K/Contact suppress 25%, BB 10%, Park 10%, Ump 5%
+  // *history weight 0→40% per pitcher based on sample size (10→30+ GS)
   // spFinnEra baseline: first-inning ERA tends to be ~4.0-4.2 for average starters
   // Using 4.10 so average pitchers score near 0.50 (neutral)
   var FINN_ERA_AVG = 4.10;
@@ -2303,32 +2304,40 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   // Suppress = 50% K quality + 50% contact quality vs top-3 hitter quality
   var aSuppressQ = (awyKQ * 0.50 + awyCQ * 0.50) * 0.6 + (0.50 - awyTop3q) * 0.4;
   var hSuppressQ = (homKQ * 0.50 + homCQ * 0.50) * 0.6 + (0.50 - homTop3q) * 0.4;
-  // Blend model suppression with historical NRFI rate
-  // Historical rate is the direct measurement — model fills in when no history exists
-  var awyHistAdj = awyHistRate != null ? (awyHistRate - 0.66) * awyHistWt : 0; // 0.66 = league avg NRFI%
-  var homHistAdj = homHistRate != null ? (homHistRate - 0.66) * homHistWt : 0;
-  var aSuppressQ_final = aSuppressQ * (1 - awyHistWt) + awyHistAdj;
-  var hSuppressQ_final = hSuppressQ * (1 - homHistWt) + homHistAdj;
-  var awySuppress = aSuppressQ_final;
-  var homSuppress = hSuppressQ_final;
-  var avgSuppress = (awySuppress + homSuppress) / 2; // range ~-0.50 to +0.50
+  // ── History as DIRECT independent signal (not nested in suppress) ──────────
+  // ROOT CAUSE FIX: history was buried in the suppress component (35% total weight)
+  // A pitcher with 89% NRFI rate outperforms their K%/ERA — that info is EXTRA,
+  // not captured by K% or FI ERA. It should contribute to nrfiRaw directly.
+  // League avg NRFI ≈ 66%. Deviation × weight = direct edge.
+  var awyHistEdge = awyHistRate != null ? (awyHistRate - 0.66) * awyHistWt : 0.0;
+  var homHistEdge = homHistRate != null ? (homHistRate - 0.66) * homHistWt : 0.0;
+  // Combined history edge (both pitchers): cap at ±0.15 to prevent over-reliance
+  var histEdge = Math.max(-0.15, Math.min(0.15, awyHistEdge + homHistEdge));
 
-  // First-inning ERA: lower ERA = better NRFI. awFI_era is a percentile (higher = better ERA)
-  var fiEraEdge = ((awFI_era - 0.50) + (homFI_era - 0.50)) / 2; // range ~-0.35 to +0.35
+  // Model factors: K/contact suppression (no longer diluted by history)
+  var avgSuppress = (aSuppressQ + hSuppressQ) / 2;
+
+  // First-inning ERA: lower = better NRFI
+  var fiEraEdge = ((awFI_era - 0.50) + (homFI_era - 0.50)) / 2;
 
   // BB rate: lower BB in 1st = fewer baserunners = better NRFI
   var fibbEdge = ((awFI_bb - 0.50) + (homFI_bb - 0.50)) / 2;
 
   // Park: lower HR park = better NRFI
   var parkNRFI = pct(1/pfHR, 1.0, 0.15, true);
-  var parkEdge = parkNRFI - 0.50; // range ~-0.20 to +0.20
+  var parkEdge = parkNRFI - 0.50;
 
+  // ── NEW NRFI RAW FORMULA ──────────────────────────────────────────────────
+  // History is now a first-class direct signal, weight scaled by sample size
+  // Weights: Hist(direct)~25%*, ERA 25%, Suppress 25%, BB 10%, Park 10%, Ump 5%
+  // *history weight varies per pitcher (0→40%) so effective contribution varies
   var nrfiRaw = 0.50
-    + fiEraEdge   * 0.30  // First-inning ERA quality
-    + avgSuppress * 0.35  // SP K rate vs top-of-order quality
-    + fibbEdge    * 0.12  // Walk rate (fewer walks = better)
-    + parkEdge    * 0.13  // Park HR factor
-    + umpKAdj     * 0.05; // Ump K zone
+    + histEdge              // NRFI history: direct independent signal
+    + fiEraEdge   * 0.25   // First-inning ERA quality
+    + avgSuppress * 0.25   // K/contact suppression vs lineup
+    + fibbEdge    * 0.10   // Walk rate (fewer walks = better)
+    + parkEdge    * 0.10   // Park HR factor
+    + umpKAdj     * 0.05;  // Ump K zone
   nrfiRaw = Math.max(0.22, Math.min(0.88, nrfiRaw));
   // Use same deviation formula as ML/OU for consistency
   // 50 = neutral, deviation * 142 = score spread
