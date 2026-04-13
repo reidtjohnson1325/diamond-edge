@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260413-2213]</title>
+<title>Diamond Edge — MLB 2026 [v20260413-2243]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2023,7 +2023,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260413-2213"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260413-2243"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2379,24 +2379,38 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   mlScore = Math.min(92, Math.max(25, mlScore));
   var mlPlay  = homeFavored ? homeData.abbr + ' ML' : awayData.abbr + ' ML';
   var mlEdge  = parseFloat(Math.abs(mlRaw - 0.50) * 20).toFixed(1);
+  // ML factors: show BOTH teams explicitly so user can see full comparison
+  var awySPxfip = awySP ? (awySP.xfip||awySP.era||4.0).toFixed(2) : 'N/A';
+  var homSPxfip = homSP ? (homSP.xfip||homSP.era||4.0).toFixed(2) : 'N/A';
+  var awyWRC = awyOffp.wrc ? ' (wRC+'+awyOffp.wrc+')' : '';
+  var homWRC = homOffp.wrc ? ' (wRC+'+homOffp.wrc+')' : '';
+  var awyOPS = awyOff ? awyOff.ops.toFixed(3) : 'N/A';
+  var homOPS = homOff ? homOff.ops.toFixed(3) : 'N/A';
+  var awyBPfip = (function(){ var fg=getFGBullpen(game.awayTeamId); return fg?fg.fip.toFixed(2)+' FIP':(awyBP?awyBP.era.toFixed(2)+' ERA':'N/A'); })();
+  var homBPfip = (function(){ var fg=getFGBullpen(game.homeTeamId); return fg?fg.fip.toFixed(2)+' FIP':(homBP?homBP.era.toFixed(2)+' ERA':'N/A'); })();
   var mlFactors = [
-    {n: homSPp.overall > awySPp.overall ? homeData.abbr+' SP quality (Savant blend)' : awayData.abbr+' SP quality (Savant blend)',
-     v: (homSPp.overall > awySPp.overall ? homSP : awySP) ? ((homSPp.overall > awySPp.overall ? homSP : awySP).xfip||4.0).toFixed(2)+' xFIP' : 'N/A',
-     pct: Math.round(Math.max(homSPp.overall, awySPp.overall)*100)},
-    {n:'Offense edge (wRC+ / OPS)', v:(function(){
-      var favOff = homOffp.overall > awyOffp.overall ? homOffp : awyOffp;
-      var favLabel = homOffp.overall > awyOffp.overall ? homeData.abbr : awayData.abbr;
-      var wrcStr = favOff.wrc ? ' wRC+'+favOff.wrc : '';
-      var rawOps = (homOffp.overall > awyOffp.overall ? homOff : awyOff);
-      return (rawOps ? rawOps.ops.toFixed(3) : 'N/A') + wrcStr;
-    })(), pct:Math.round(Math.max(homOffp.overall, awyOffp.overall)*100)},
+    // Away SP vs Home SP — both shown
+    {n: awayData.abbr+' SP xFIP (away)', v: awySPxfip+' xFIP',
+     pct: Math.round(awySPp.overall*100)},
+    {n: homeData.abbr+' SP xFIP (home)', v: homSPxfip+' xFIP',
+     pct: Math.round(homSPp.overall*100)},
+    // Offense — both shown with wRC+
+    {n: awayData.abbr+' offense'+awyWRC, v: awyOPS+' OPS',
+     pct: Math.round(awyOffp.overall*100)},
+    {n: homeData.abbr+' offense'+homWRC, v: homOPS+' OPS',
+     pct: Math.round(homOffp.overall*100)},
+    // Bullpen — both shown
+    {n: awayData.abbr+' bullpen', v: awyBPfip,
+     pct: Math.round(awyBPera_p*100)},
+    {n: homeData.abbr+' bullpen', v: homBPfip,
+     pct: Math.round(homBPera_p*100)},
+    {n:'Home field + ump', v:'+0.025 base'+(umpRunAdj!==0?' | Ump '+(umpRunAdj>0?'+':'')+ump.runAdj.toFixed(1)+'/g':''), pct:53},
+    {n:'Pythagorean win%', v:(function(){ return 'AW '+awyPythP.toFixed(3)+' vs HM '+homPythP.toFixed(3); })(), pct:Math.round(Math.max(homPythP,awyPythP)*100)},
     {n:'Platoon matchup', v:awyPlat||homPlat?'Applied':'Neutral', pct:Math.round(Math.max(awyOffp.overall,homOffp.overall)*100)},
-    {n:'Bullpen ERA', v:(homBPera_p>awyBPera_p?homBP:awyBP)?((homBPera_p>awyBPera_p?homBP:awyBP).era||4.2).toFixed(2)+' ERA':(Math.max(homBPgames,awyBPgames)<7?'< 7 games (neutral)':'N/A'), pct:Math.round(Math.max(homBPera_p,awyBPera_p)*100)},
-    {n:'Home field + ump', v:'+0.04 base'+(umpRunAdj!==0?' | Ump '+(umpRunAdj>0?'+':'')+ump.runAdj.toFixed(1)+'/g':''), pct:54},
-    {n:'Pythagorean win% edge', v:(function(){ var h=homPythP.toFixed(3); var a=awyPythP.toFixed(3); return (homPythP>awyPythP?'HM ':awyPythP>homPythP?'AW ':'')+Math.max(homPythP,awyPythP).toFixed(3)+' vs '+Math.min(homPythP,awyPythP).toFixed(3); })(), pct:Math.round(Math.max(homPythP,awyPythP)*100)},
-    {n:'SP Savant K%', v:(homSPp.overall>awySPp.overall?homSPp:awySPp).savant?((homSPp.overall>awySPp.overall?homSPp:awySPp).savant.k_pct||'--')+'%':'N/A', pct:Math.round(Math.max(homSPp.k9,awySPp.k9)*100)},
-    {n:'SP xwOBA vs / Hard Hit%', v:(function(){var sp=(homSPp.overall>awySPp.overall?homSPp:awySPp).savant;return sp?(sp.xwoba_vs||'--')+' / '+(sp.hard_hit_vs||'--')+'%':'N/A';})(), pct:Math.round(Math.max((homSPp.svContactQuality||0),(awySPp.svContactQuality||0))*100)},
-    {n:'SP Exit Velocity vs', v:(function(){var sp=(homSPp.overall>awySPp.overall?homSPp:awySPp).savant;return sp&&sp.ev_vs?sp.ev_vs.toFixed(1)+' mph':'N/A';})(), pct:Math.round(Math.max((homSPp.svEV||0.5),(awySPp.svEV||0.5))*100)}
+    // Keep Savant detail on the better SP for reference
+    {n:'Best SP Savant K%', v:(homSPp.overall>awySPp.overall?homSPp:awySPp).savant?((homSPp.overall>awySPp.overall?homSPp:awySPp).savant.k_pct||'--')+'%':'N/A', pct:Math.round(Math.max(homSPp.k9,awySPp.k9)*100)},
+    {n:'Best SP xwOBA / HardHit%', v:(function(){var sp=(homSPp.overall>awySPp.overall?homSPp:awySPp).savant;return sp?(sp.xwoba_vs||'--')+' / '+(sp.hard_hit_vs||'--')+'%':'N/A';})(), pct:Math.round(Math.max((homSPp.svContactQuality||0),(awySPp.svContactQuality||0))*100)},
+    {n:'Best SP Exit Velocity', v:(function(){var sp=(homSPp.overall>awySPp.overall?homSPp:awySPp).savant;return sp&&sp.ev_vs?sp.ev_vs.toFixed(1)+' mph':'N/A';})(), pct:Math.round(Math.max((homSPp.svEV||0.5),(awySPp.svEV||0.5))*100)}
   ];
 
   // ── OVER/UNDER ──────────────────────────────────────────────────
@@ -2467,11 +2481,14 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   var awySpRuns = (awySpERA / 9.0) * SP_INN; // runs allowed by away SP (vs home offense)
   var homSpRuns = (homSpERA / 9.0) * SP_INN; // runs allowed by home SP (vs away offense)
   
-  // BP contribution: team BP ERA for remaining innings
+  // BP contribution: use FG FIP (more reliable) when available, else team ERA
+  var awyBPfipVal = (function(){ var fg=getFGBullpen(game.awayTeamId); return fg ? fg.fip : (awyBP ? awyBP.era : 4.30); })();
+  var homBPfipVal = (function(){ var fg=getFGBullpen(game.homeTeamId); return fg ? fg.fip : (homBP ? homBP.era : 4.30); })();
+  var awyBPruns = (awyBPfipVal / 9.0) * BP_INN;
+  var homBPruns = (homBPfipVal / 9.0) * BP_INN;
+  // Keep legacy vars for display
   var awyBPera = awyBP ? awyBP.era : 4.30;
   var homBPera = homBP ? homBP.era : 4.30;
-  var awyBPruns = (awyBPera / 9.0) * BP_INN;
-  var homBPruns = (homBPera / 9.0) * BP_INN;
   
   // Expected runs per side = offense mult * (SP runs allowed + BP runs allowed) * park * weather
   var weatherMult = 1.0 + (windImpact * 0.06) + ((tempAdj + humidAdj) * 0.04);
@@ -2504,9 +2521,21 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
     {n:'Model vs book line', v:modelVsBook+' runs ('+ouPlay+')', pct:ouFavorOver ? Math.min(85,60+lineDiff*8) : Math.max(15,40+lineDiff*8)},
     {n:'Away SP xFIP', v:awySP?awySP.xfip.toFixed(2):'N/A', pct:Math.round(awySPp.xfip*100)},
     {n:'Home SP xFIP', v:homSP?homSP.xfip.toFixed(2):'N/A', pct:Math.round(homSPp.xfip*100)},
-    {n:'Away exp runs', v:projAwayRuns.toFixed(2)+' ('+awyOff?awyOff.ops.toFixed(3)+'OPS':'N/A'+')', pct:Math.round(50+(projAwayRuns-4.5)*15)},
-    {n:'Home exp runs', v:projHomeRuns.toFixed(2)+' ('+homOff?homOff.ops.toFixed(3)+'OPS':'N/A'+')', pct:Math.round(50+(projHomeRuns-4.5)*15)},
-    {n:'Bullpen quality avg', v:((awyBPera+homBPera)/2).toFixed(2)+' ERA avg', pct:Math.round(bpQuality*100)},
+    {n:'Away exp runs', v:(function(){
+      var fg=getFGBatting(game.awayTeamId);
+      var qual=fg?'wRC+'+fg.wrc:(awyOff?awyOff.ops.toFixed(3)+' OPS':'N/A');
+      return projAwayRuns.toFixed(2)+' R ('+qual+' vs '+homSPxfip+'xFIP)';
+    })(), pct:Math.round(50+(projAwayRuns-4.5)*15)},
+    {n:'Home exp runs', v:(function(){
+      var fg=getFGBatting(game.homeTeamId);
+      var qual=fg?'wRC+'+fg.wrc:(homOff?homOff.ops.toFixed(3)+' OPS':'N/A');
+      return projHomeRuns.toFixed(2)+' R ('+qual+' vs '+awySPxfip+'xFIP)';
+    })(), pct:Math.round(50+(projHomeRuns-4.5)*15)},
+    {n:'Bullpen quality avg', v:(function(){
+      var afip=(getFGBullpen(game.awayTeamId)||{}).fip||awyBPera;
+      var hfip=(getFGBullpen(game.homeTeamId)||{}).fip||homBPera;
+      return ((afip+hfip)/2).toFixed(2)+' FIP avg ('+awayData.abbr+' '+afip.toFixed(2)+' / '+homeData.abbr+' '+hfip.toFixed(2)+')';
+    })(), pct:Math.round(bpQuality*100)},
     {n:'Park run factor', v:pf.toFixed(2), pct:Math.round((pf>1?(pf-0.8)/0.6:(pf-0.8)/0.2)*100)},
     {n:'Wind impact', v:(windImpact>0?'+':'')+windImpact.toFixed(2)+' runs', pct:Math.round(50+windImpact*20)},
     {n:'Temp + humidity adj', v:(tempAdj+humidAdj>0?'+':'')+(tempAdj+humidAdj).toFixed(2)+' runs', pct:50},
