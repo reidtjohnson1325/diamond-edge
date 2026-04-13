@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260411-1521]</title>
+<title>Diamond Edge — MLB 2026 [v20260413-2138]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -1841,7 +1841,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260411-1521"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260413-2138"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2164,12 +2164,14 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   var mlSPedge   = (homSPp.overall - awySPp.overall) * 0.42;
   var mlBPedge   = (homBPera_p - awyBPera_p) * 0.13;
   var mlOffEdge  = (homOffp.overall - awyOffp.overall) * 0.28;
-  var mlContext  = 0.04 + umpRunAdj * 0.02 + divAdj; // home field + ump + div adjustment
-  var mlRaw = 0.50 + mlSPedge + mlBPedge + mlOffEdge + mlPythEdge + mlContext;
+  // Home field: research-confirmed +0.4 runs = +0.025 win probability
+  // NOT +0.04 — the original value was too aggressive, systematically biasing toward home
+  var homAdv = 0.025 + umpRunAdj * 0.015 + divAdj;
+  var mlRaw = 0.50 + mlSPedge + mlBPedge + mlOffEdge + mlPythEdge + homAdv;
   mlRaw = Math.max(0.22, Math.min(0.78, mlRaw));
-  // Dead zone: if raw is within 0.06 of neutral (0.44-0.56), clamp score to SKIP
-  // These plays have no real conviction — model is basically saying coin flip
-  if (Math.abs(mlRaw - 0.50) < 0.06) mlRaw = 0.50; // force to neutral → SKIP
+  // Dead zone: tightened from 0.06 → 0.04 so genuine away edges can surface
+  // Research shows away dogs in divisional games +71u since 2005 — don't bury them
+  if (Math.abs(mlRaw - 0.50) < 0.04) mlRaw = 0.50; // force to neutral → SKIP
   // Score = 50 + deviation * scale
   // neutral (0.50) -> 50, strong edge (0.70) -> 78, dominant (0.78) -> 90
   var homeFavored = mlRaw >= 0.50;
@@ -2225,12 +2227,72 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   ouScore = Math.min(92, Math.max(25, ouScore));
   var ouPlay  = ouFavorOver ? 'OVER' : 'UNDER';
   var ouEdge  = parseFloat(Math.abs(ouRaw - 0.50) * 22).toFixed(1);
+  // ── PROJECTED TOTAL LINE ─────────────────────────────────────────
+  // Calculate expected runs per side from first principles:
+  // Base run rate uses league avg 4.5 R/G, adjusted by:
+  //   Offense quality (OPS/ISO vs league avg) → run scoring rate
+  //   Opposing SP ERA/xFIP → run prevention
+  //   Park factor → environment multiplier
+  //   Bullpen ERA for remaining innings (avg SP goes ~5.5 inn)
+  //   Weather adjustments
+  var lgAvgRPG = 4.50; // 2025/2026 MLB average runs per game
+  var SP_INN = 5.5;    // expected SP innings
+  var BP_INN = 3.5;    // expected BP innings
+  
+  // Offense-adjusted run rate: OPS 0.720 = league avg
+  // Calibrated: OPS 0.720 (league avg) → 4.25 R/G per team → 8.5 total (market avg)
+  // Scale factor 3.5: OPS +0.040 above avg → +0.14 mult → +0.59 runs/game per team
+  var awyOffMult = awyOff ? (1.003 + (awyOff.ops - 0.720) * 3.5) : 1.003;
+  var homOffMult = homOff ? (1.003 + (homOff.ops - 0.720) * 3.5) : 1.003;
+  awyOffMult = Math.max(0.60, Math.min(1.50, awyOffMult));
+  homOffMult = Math.max(0.60, Math.min(1.50, homOffMult));
+  
+  // SP contribution: ERA over expected innings
+  var awySpERA = awySP ? (awySP.xfip || awySP.era || 4.20) : 4.20;
+  var homSpERA = homSP ? (homSP.xfip || homSP.era || 4.20) : 4.20;
+  var awySpRuns = (awySpERA / 9.0) * SP_INN; // runs allowed by away SP (vs home offense)
+  var homSpRuns = (homSpERA / 9.0) * SP_INN; // runs allowed by home SP (vs away offense)
+  
+  // BP contribution: team BP ERA for remaining innings
+  var awyBPera = awyBP ? awyBP.era : 4.30;
+  var homBPera = homBP ? homBP.era : 4.30;
+  var awyBPruns = (awyBPera / 9.0) * BP_INN;
+  var homBPruns = (homBPera / 9.0) * BP_INN;
+  
+  // Expected runs per side = offense mult * (SP runs allowed + BP runs allowed) * park * weather
+  var weatherMult = 1.0 + (windImpact * 0.06) + ((tempAdj + humidAdj) * 0.04);
+  weatherMult = Math.max(0.85, Math.min(1.20, weatherMult));
+  
+  // Away team scores against HOME sp+bp, home team scores against AWAY sp+bp
+  var projAwayRuns = homOffMult * (homSpRuns + homBPruns) * pf * weatherMult;
+  var projHomeRuns = awyOffMult * (awySpRuns + awyBPruns) * pf * weatherMult;
+  var projTotal = parseFloat((projAwayRuns + projHomeRuns).toFixed(1));
+  
+  // Book line for comparison (from game.total)
+  var bookLine = game.total || 8.5;
+  var lineDiff = parseFloat((projTotal - bookLine).toFixed(1));
+  var modelVsBook = (lineDiff > 0 ? '+' : '') + lineDiff;
+  
+  // ─────────────────────────────────────────────────────────────────
+  // Use projected total to validate/strengthen the OVER/UNDER call:
+  // If model says UNDER and projTotal < bookLine → stronger conviction
+  // If model says OVER and projTotal > bookLine → stronger conviction
+  var ouConvictionBoost = 0;
+  if (!ouFavorOver && projTotal < bookLine - 0.3) ouConvictionBoost = 0.03;
+  if (ouFavorOver  && projTotal > bookLine + 0.3) ouConvictionBoost = 0.03;
+  ouRaw = Math.max(0.22, Math.min(0.78, ouRaw + (ouFavorOver ? 1 : -1) * ouConvictionBoost));
+  ouDev = Math.abs(ouRaw - 0.50);
+  ouScore = Math.round(50 + ouDev * 130);
+  ouScore = Math.min(92, Math.max(25, ouScore));
+
   var ouFactors = [
+    {n:'Model projected total', v:projTotal.toFixed(1)+' runs (book: '+bookLine+')', pct:Math.round(50 + lineDiff * 8)},
+    {n:'Model vs book line', v:modelVsBook+' runs ('+ouPlay+')', pct:ouFavorOver ? Math.min(85,60+lineDiff*8) : Math.max(15,40+lineDiff*8)},
     {n:'Away SP xFIP', v:awySP?awySP.xfip.toFixed(2):'N/A', pct:Math.round(awySPp.xfip*100)},
     {n:'Home SP xFIP', v:homSP?homSP.xfip.toFixed(2):'N/A', pct:Math.round(homSPp.xfip*100)},
-    {n:'Away offense OPS', v:awyOff?awyOff.ops.toFixed(3):'N/A', pct:Math.round(awyOffp.ops*100)},
-    {n:'Home offense OPS', v:homOff?homOff.ops.toFixed(3):'N/A', pct:Math.round(homOffp.ops*100)},
-    {n:'Bullpen quality avg', v:((awyBP?awyBP.era:4.0+homBP?homBP.era:4.0)/2).toFixed(2)+' ERA', pct:Math.round(bpQuality*100)},
+    {n:'Away exp runs', v:projAwayRuns.toFixed(2)+' ('+awyOff?awyOff.ops.toFixed(3)+'OPS':'N/A'+')', pct:Math.round(50+(projAwayRuns-4.5)*15)},
+    {n:'Home exp runs', v:projHomeRuns.toFixed(2)+' ('+homOff?homOff.ops.toFixed(3)+'OPS':'N/A'+')', pct:Math.round(50+(projHomeRuns-4.5)*15)},
+    {n:'Bullpen quality avg', v:((awyBPera+homBPera)/2).toFixed(2)+' ERA avg', pct:Math.round(bpQuality*100)},
     {n:'Park run factor', v:pf.toFixed(2), pct:Math.round((pf>1?(pf-0.8)/0.6:(pf-0.8)/0.2)*100)},
     {n:'Wind impact', v:(windImpact>0?'+':'')+windImpact.toFixed(2)+' runs', pct:Math.round(50+windImpact*20)},
     {n:'Temp + humidity adj', v:(tempAdj+humidAdj>0?'+':'')+(tempAdj+humidAdj).toFixed(2)+' runs', pct:50},
@@ -2456,8 +2518,14 @@ function scoreGame(awayData, homeData, wx, park, ump, game) {
   function edgeVal(s) { return parseFloat((s/100*14-4).toFixed(1)); }
 
   // Correlation: elite SP → surface correlated under + favored ML
-  var spElite = Math.max(awySPp.overall, homSPp.overall) > 0.72;
-  var badBP   = Math.min(awyBPp.overall, homBPp.overall) < 0.38;
+  // spElite: only flag when SP is genuinely elite (0.80+ = top ~15%)
+  // badBP: only flag when BOTH teams have 10+ games of BP data AND one is truly bad
+  // Early season almost all BP ERAs are noisy — require minimum sample
+  var spElite = Math.max(awySPp.overall, homSPp.overall) > 0.80;
+  var awyBPsampled = awyBPgames >= 10;
+  var homBPsampled = homBPgames >= 10;
+  var badBP = (awyBPsampled || homBPsampled) && 
+              Math.min(awyBPp.overall, homBPp.overall) < 0.30; // genuinely bad, not just below avg
 
   // Bullpen tired flag
   // Pen flag requires 10+ games in the log to be meaningful
@@ -4003,6 +4071,7 @@ function renderTodayPicker() {
       '<span class="pl p-'+typeSlug+'" style="flex-shrink:0">'+displayType+'</span>' +
       '<span class="tpr-match">'+g.away+' @ '+g.home+'</span>' +
       '<span class="tpr-play">'+p.play+'</span>' +
+      (function(){var f='';if(g.flags.bvp)f+='<span class="fg fg-bvp">BvP</span>';if(g.flags.platoon)f+='<span class="fg fg-pl">Plat</span>';if(g.flags.bullpenTired)f+='<span class="fg fg-bf">Pen</span>';if(g.flags.umpFlag)f+='<span class="fg fg-ump">Ump</span>';return f?'<span style="display:inline-flex;gap:2px;align-items:center">'+f+'</span>':'';})()+
       '<span class="tpr-conf '+cc+'">'+p.conf+'</span>' +
       '<span class="tpr-score">'+p.score+'</span>' +
       inputHtml;
