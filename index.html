@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260414-2038]</title>
+<title>Diamond Edge — MLB 2026 [v20260414-2046]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2023,7 +2023,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260414-2038"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260414-2046"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2495,42 +2495,8 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   ouRaw = Math.max(0.22, Math.min(0.78, ouRaw));
   var ouFavorOver = ouRaw >= 0.50;
 
-  // ── PREDICTION-BASED O/U SCORING ──────────────────────────────────
-  // Primary signal: how far does our projected total deviate from the book line?
-  // This is the actual edge — not relative team comparison, but absolute prediction vs market.
-  // Secondary: ouRaw relative factors (SP quality, offense) as confirmation
-  var projGap = projTotal - bookLine;   // positive = lean OVER, negative = lean UNDER
-  var projDir = projGap >= 0 ? 'OVER' : 'UNDER';
+  // ouRelDir used later in scoring
   var ouRelDir = ouFavorOver ? 'OVER' : 'UNDER';
-
-  // Scale: gap of 1.5 runs → tanh ≈ 0.905 → confidence 0.905
-  var projConf = Math.tanh(Math.abs(projGap) / 1.5);  // 0→1
-  // Relative factors confirm or contradict the projection
-  var relConf  = Math.abs(ouRaw - 0.50) * 2.0;         // 0→0.56 max
-  // Agreement bonus: if both signals agree, boost confidence
-  var dirAgree = projDir === ouRelDir ? 1.0 : 0.78;   // mild dampening when signals conflict — projection usually wins
-
-  // Blend: 70% projection gap, 30% relative factors
-  var ouConf = Math.min(0.95, (projConf * 0.80 + relConf * 0.20) * dirAgree);
-
-  // Map confidence to score
-  // ouConf=0 → 50 (skip), 0.3 → 64, 0.5 → 73, 0.7 → 82, 0.9 → 90
-  var ouScore = Math.round(50 + ouConf * 45);
-  ouScore = Math.min(95, Math.max(50, ouScore));
-
-  // Dead zone: if projected gap < 0.25 runs, genuinely no edge
-  if (Math.abs(projGap) < 0.25) {
-    ouScore = 50;
-    ouConf = 0;
-  }
-
-  // Play direction follows the projection (it's our actual prediction)
-  var ouPlay = projDir;
-  // If projection gap is tiny, fall back to relative signal for direction
-  if (Math.abs(projGap) < 0.15) ouPlay = ouRelDir;
-
-  var ouDev  = Math.abs(ouRaw - 0.50);
-  var ouEdge = isNaN(projGap) ? '0.0' : parseFloat(Math.abs(projGap) * 2.5).toFixed(1);
   // ── PROJECTED TOTAL LINE ─────────────────────────────────────────
   // Calculate expected runs per side from first principles:
   // Base run rate uses league avg 4.5 R/G, adjusted by:
@@ -2588,6 +2554,31 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   var bookLine = (game.total && !isNaN(game.total)) ? game.total : 8.5;
   var lineDiff = parseFloat((projTotal - bookLine).toFixed(1));
   var modelVsBook = (lineDiff > 0 ? '+' : '') + lineDiff;
+
+  // ── PREDICTION-BASED O/U SCORING ──────────────────────────────────
+  // projTotal and bookLine are now defined — safe to compute the edge
+  var projGap = projTotal - bookLine;   // positive = lean OVER, negative = lean UNDER
+  var projDir = projGap >= 0 ? 'OVER' : 'UNDER';
+
+  // Scale: 1.5 run gap → tanh ≈ 0.905 → high confidence
+  var projConf = Math.tanh(Math.abs(projGap) / 1.5);  // 0→1
+  // Relative factors (SP quality, offense) as secondary signal
+  var relConf  = Math.abs(ouRaw - 0.50) * 2.0;
+  // Agreement bonus: both signals pointing same way = stronger conviction
+  var dirAgree = projDir === ouRelDir ? 1.0 : 0.78;
+
+  var ouConf = Math.min(0.95, (projConf * 0.80 + relConf * 0.20) * dirAgree);
+  var ouScore = Math.round(50 + ouConf * 45);
+  ouScore = Math.min(95, Math.max(50, ouScore));
+
+  // Dead zone: gap < 0.25 runs → genuinely no edge
+  if (Math.abs(projGap) < 0.25) { ouScore = 50; ouConf = 0; }
+
+  // Direction from projection; fallback to relative signal if gap is tiny
+  var ouPlay = (Math.abs(projGap) >= 0.15) ? projDir : ouRelDir;
+
+  var ouDev  = Math.abs(ouRaw - 0.50);
+  var ouEdge = isNaN(projGap) ? '0.0' : parseFloat(Math.abs(projGap) * 2.5).toFixed(1);
   
   // Conviction boost removed — projTotal gap is now primary signal
 
