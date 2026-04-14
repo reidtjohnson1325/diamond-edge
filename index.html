@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260414-2046]</title>
+<title>Diamond Edge — MLB 2026 [v20260414-2053]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2023,7 +2023,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260414-2046"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260414-2053"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2050,7 +2050,7 @@ function offPercents(off, teamId, spHand) {
   if (!off) return {ops:0.5,kpct:0.5,bbpct:0.5,iso:0.5,rpg:0.5,overall:0.5,wrc:null};
   var fg = getFGBatting(teamId, spHand);
   var wrcPct = fg ? wrcToPercent(fg.wrc) : null;
-  var opsSrc = (fg && fg.ops) ? fg.ops : off.ops;
+  var opsSrc = (fg && fg.ops && !isNaN(fg.ops)) ? fg.ops : ((off && off.ops != null && !isNaN(off.ops)) ? off.ops : 0.720);
   var kpctSrc = (fg && fg.k) ? fg.k : off.kpct;
   var bbpctSrc = (fg && fg.bb) ? fg.bb : off.bbpct;
   var isoSrc = (fg && fg.iso) ? fg.iso : off.iso;
@@ -2433,8 +2433,8 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   var homSPxfip = homSP ? (homSP.xfip||homSP.era||4.0).toFixed(2) : 'N/A';
   var awyWRC = awyOffp.wrc ? ' (wRC+'+awyOffp.wrc+')' : '';
   var homWRC = homOffp.wrc ? ' (wRC+'+homOffp.wrc+')' : '';
-  var awyOPS = awyOff ? awyOff.ops.toFixed(3) : 'N/A';
-  var homOPS = homOff ? homOff.ops.toFixed(3) : 'N/A';
+  var awyOPS = (awyOff && awyOff.ops != null && !isNaN(awyOff.ops)) ? awyOff.ops.toFixed(3) : 'N/A';
+  var homOPS = (homOff && homOff.ops != null && !isNaN(homOff.ops)) ? homOff.ops.toFixed(3) : 'N/A';
   var awyBPfip = (function(){ var fg=getFGBullpen(game.awayTeamId); return fg?fg.fip.toFixed(2)+' FIP':(awyBP?awyBP.era.toFixed(2)+' ERA':'N/A'); })();
   var homBPfip = (function(){ var fg=getFGBullpen(game.homeTeamId); return fg?fg.fip.toFixed(2)+' FIP':(homBP?homBP.era.toFixed(2)+' ERA':'N/A'); })();
   var mlFactors = [
@@ -2517,7 +2517,7 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
     if (fg && fg.wrc && !isNaN(fg.wrc)) {
       return Math.max(0.60, Math.min(1.50, 1.003 + (fg.wrc - 100) * 0.0058));
     }
-    var ops = (off && off.ops && !isNaN(off.ops)) ? off.ops : 0.720;
+    var ops = (off && off.ops != null && !isNaN(off.ops)) ? off.ops : 0.720;
     return Math.max(0.60, Math.min(1.50, 1.003 + (ops - 0.720) * 3.5));
   };
   var awyOffMult = getOffMult(awyOff, game.awayTeamId);
@@ -2589,12 +2589,12 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
     {n:'Home SP xFIP', v:homSP?homSP.xfip.toFixed(2):'N/A', pct:Math.round(homSPp.xfip*100)},
     {n:'Away exp runs', v:(function(){
       var fg=getFGBatting(game.awayTeamId);
-      var qual=fg?'wRC+'+fg.wrc:(awyOff?awyOff.ops.toFixed(3)+' OPS':'N/A');
+      var qual=fg?'wRC+'+fg.wrc:((awyOff&&awyOff.ops!=null&&!isNaN(awyOff.ops))?awyOff.ops.toFixed(3)+' OPS':'N/A');
       return projAwayRuns.toFixed(2)+' R ('+qual+' vs '+homSPxfip+'xFIP)';
     })(), pct:Math.round(50+(projAwayRuns-4.5)*15)},
     {n:'Home exp runs', v:(function(){
       var fg=getFGBatting(game.homeTeamId);
-      var qual=fg?'wRC+'+fg.wrc:(homOff?homOff.ops.toFixed(3)+' OPS':'N/A');
+      var qual=fg?'wRC+'+fg.wrc:((homOff&&homOff.ops!=null&&!isNaN(homOff.ops))?homOff.ops.toFixed(3)+' OPS':'N/A');
       return projHomeRuns.toFixed(2)+' R ('+qual+' vs '+awySPxfip+'xFIP)';
     })(), pct:Math.round(50+(projHomeRuns-4.5)*15)},
     {n:'Bullpen quality avg', v:(function(){
