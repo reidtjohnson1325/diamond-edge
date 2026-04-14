@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260414-2026]</title>
+<title>Diamond Edge — MLB 2026 [v20260414-2038]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2023,7 +2023,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260414-2026"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260414-2038"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2393,21 +2393,33 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   // Score = 50 + deviation * scale
   // neutral (0.50) -> 50, strong edge (0.70) -> 78, dominant (0.78) -> 90
   // ── PREDICTION-BASED ML ENHANCEMENT ─────────────────────────────────
-  // Blend relative factors (mlRaw) with projected-run Pythagorean
-  // The O/U model already computed projHomeRuns / projAwayRuns
-  // Use those for a Pythagorean win probability — more predictive than
-  // comparing SP percentiles directly
-  var mlPythFromProj = 0.50;
-  if (typeof projHomeRuns !== 'undefined' && projHomeRuns > 0 && projAwayRuns > 0) {
-    var exp183 = 1.83;
-    mlPythFromProj = Math.pow(projHomeRuns, exp183) /
-      (Math.pow(projHomeRuns, exp183) + Math.pow(projAwayRuns, exp183));
-    mlPythFromProj += 0.025; // home field
-    mlPythFromProj = Math.min(0.80, Math.max(0.20, mlPythFromProj));
+  // Compute projected runs inline here — projHomeRuns/projAwayRuns are defined
+  // later in the O/U section, so we can't reference them here without getting NaN
+  var mlSP_INN = 5.5; var mlBP_INN = 3.5;
+  var mlFGAwy = getFGBatting(game.awayTeamId);
+  var mlFGHom = getFGBatting(game.homeTeamId);
+  var mlAwyWRC = (mlFGAwy && mlFGAwy.wrc && !isNaN(mlFGAwy.wrc)) ? mlFGAwy.wrc : 100;
+  var mlHomWRC = (mlFGHom && mlFGHom.wrc && !isNaN(mlFGHom.wrc)) ? mlFGHom.wrc : 100;
+  var mlAwyMult = Math.max(0.60, Math.min(1.50, 1.003 + (mlAwyWRC - 100) * 0.0058));
+  var mlHomMult = Math.max(0.60, Math.min(1.50, 1.003 + (mlHomWRC - 100) * 0.0058));
+  var mlAwySpERA = awySP ? (awySP.xfip || awySP.era || 4.20) : 4.20;
+  var mlHomSpERA = homSP ? (homSP.xfip || homSP.era || 4.20) : 4.20;
+  var mlAwyBPfip = ((getFGBullpen(game.awayTeamId)||{}).fip) || (awyBP ? awyBP.era : 4.30);
+  var mlHomBPfip = ((getFGBullpen(game.homeTeamId)||{}).fip) || (homBP ? homBP.era : 4.30);
+  var mlParkF = (game.park && !isNaN(game.park.run)) ? game.park.run : 1.0;
+  // Away team scores against HOME pitching; home scores against AWAY pitching
+  var mlProjAway = mlHomMult * ((mlHomSpERA/9)*mlSP_INN + (mlHomBPfip/9)*mlBP_INN) * mlParkF;
+  var mlProjHome = mlAwyMult * ((mlAwySpERA/9)*mlSP_INN + (mlAwyBPfip/9)*mlBP_INN) * mlParkF;
+  // Pythagorean win probability from absolute projected run totals
+  var mlPythFromProj = 0.525; // default: slight home field
+  if (mlProjHome > 0 && mlProjAway > 0 && !isNaN(mlProjHome) && !isNaN(mlProjAway)) {
+    var mlExp = 1.83;
+    mlPythFromProj = Math.pow(mlProjHome, mlExp) /
+      (Math.pow(mlProjHome, mlExp) + Math.pow(mlProjAway, mlExp));
+    mlPythFromProj = Math.min(0.80, Math.max(0.20, mlPythFromProj + 0.025));
   }
-  // Blend: 50% relative model, 50% projected-run Pythagorean
+  // Blend: 50% relative model (SP/BP/offense comparison), 50% run-based Pythagorean
   var mlRawBlended = mlRaw * 0.50 + mlPythFromProj * 0.50;
-  // Dead zone: < 0.04 from neutral → SKIP (coin flip)
   if (Math.abs(mlRawBlended - 0.50) < 0.04) mlRawBlended = 0.50;
   var homeFavored = mlRawBlended >= 0.50;
   var mlDev = Math.abs(mlRawBlended - 0.50);
@@ -2415,7 +2427,7 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   var mlScore = Math.round(50 + mlDev * 160);
   mlScore = Math.min(92, Math.max(25, mlScore));
   var mlPlay  = homeFavored ? homeData.abbr + ' ML' : awayData.abbr + ' ML';
-  var mlEdge  = parseFloat(Math.abs(mlRawBlended - 0.50) * 20).toFixed(1);
+  var mlEdge  = (!isNaN(mlRawBlended)) ? parseFloat(Math.abs(mlRawBlended - 0.50) * 20).toFixed(1) : '0.0';
   // ML factors: show BOTH teams explicitly so user can see full comparison
   var awySPxfip = awySP ? (awySP.xfip||awySP.era||4.0).toFixed(2) : 'N/A';
   var homSPxfip = homSP ? (homSP.xfip||homSP.era||4.0).toFixed(2) : 'N/A';
@@ -2443,8 +2455,9 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
      pct: Math.round(homBPera_p*100)},
     {n:'Home field + ump', v:'+0.025 base'+(umpRunAdj!==0?' | Ump '+(umpRunAdj>0?'+':'')+ump.runAdj.toFixed(1)+'/g':''), pct:53},
     {n:'Pythagorean win%', v:(function(){
-      var projStr = (typeof projHomeRuns !== 'undefined') ?
-        ' | Proj: AW '+projAwayRuns.toFixed(1)+' HM '+projHomeRuns.toFixed(1) : '';
+      // Use mlProjAway/mlProjHome computed inline in ML section above
+      var projStr = (typeof mlProjHome !== 'undefined' && !isNaN(mlProjHome)) ?
+        ' | Proj: AW '+mlProjAway.toFixed(1)+' HM '+mlProjHome.toFixed(1) : '';
       return 'AW '+awyPythP.toFixed(3)+' vs HM '+homPythP.toFixed(3) + projStr;
     })(), pct:Math.round(Math.max(homPythP,awyPythP)*100)},
     {n:'Platoon matchup', v:awyPlat||homPlat?'Applied':'Neutral', pct:Math.round(Math.max(awyOffp.overall,homOffp.overall)*100)},
@@ -2517,7 +2530,7 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   if (Math.abs(projGap) < 0.15) ouPlay = ouRelDir;
 
   var ouDev  = Math.abs(ouRaw - 0.50);
-  var ouEdge = parseFloat(Math.abs(projGap) * 2.5).toFixed(1);
+  var ouEdge = isNaN(projGap) ? '0.0' : parseFloat(Math.abs(projGap) * 2.5).toFixed(1);
   // ── PROJECTED TOTAL LINE ─────────────────────────────────────────
   // Calculate expected runs per side from first principles:
   // Base run rate uses league avg 4.5 R/G, adjusted by:
@@ -2535,13 +2548,10 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   // wRC+ 100 = avg = 4.25 R/G target; each point above/below 100 = ~0.5% run change
   var getOffMult = function(off, teamId) {
     var fg = getFGBatting(teamId);
-    if (fg && fg.wrc) {
-      // wRC+: 100=avg, each point = ~0.5% → mult = 1.003 + (wrc-100)*0.005 roughly
-      // Calibrate: wRC+100 → 1.003 (= 4.25 R/G), wRC+120 → ~1.10, wRC+80 → ~0.90
+    if (fg && fg.wrc && !isNaN(fg.wrc)) {
       return Math.max(0.60, Math.min(1.50, 1.003 + (fg.wrc - 100) * 0.0058));
     }
-    // Fallback to OPS
-    var ops = off ? off.ops : 0.720;
+    var ops = (off && off.ops && !isNaN(off.ops)) ? off.ops : 0.720;
     return Math.max(0.60, Math.min(1.50, 1.003 + (ops - 0.720) * 3.5));
   };
   var awyOffMult = getOffMult(awyOff, game.awayTeamId);
@@ -2569,10 +2579,13 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   // Away team scores against HOME sp+bp, home team scores against AWAY sp+bp
   var projAwayRuns = homOffMult * (homSpRuns + homBPruns) * pf * weatherMult;
   var projHomeRuns = awyOffMult * (awySpRuns + awyBPruns) * pf * weatherMult;
+  // Guard against NaN propagation
+  projAwayRuns = isNaN(projAwayRuns) ? 4.25 : projAwayRuns;
+  projHomeRuns = isNaN(projHomeRuns) ? 4.25 : projHomeRuns;
   var projTotal = parseFloat((projAwayRuns + projHomeRuns).toFixed(1));
-  
+
   // Book line for comparison (from game.total)
-  var bookLine = game.total || 8.5;
+  var bookLine = (game.total && !isNaN(game.total)) ? game.total : 8.5;
   var lineDiff = parseFloat((projTotal - bookLine).toFixed(1));
   var modelVsBook = (lineDiff > 0 ? '+' : '') + lineDiff;
   
