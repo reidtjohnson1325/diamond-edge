@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260414-2105]</title>
+<title>Diamond Edge — MLB 2026 [v20260416-2203]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2023,7 +2023,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260414-2105"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260416-2203"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2395,21 +2395,22 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   // ── PREDICTION-BASED ML ENHANCEMENT ─────────────────────────────────
   // Compute projected runs inline here — projHomeRuns/projAwayRuns are defined
   // later in the O/U section, so we can't reference them here without getting NaN
-  var mlSP_INN = 5.5; var mlBP_INN = 3.5;
-  var mlFGAwy = getFGBatting(game.awayTeamId);
-  var mlFGHom = getFGBatting(game.homeTeamId);
-  var mlAwyWRC = (mlFGAwy && mlFGAwy.wrc && !isNaN(mlFGAwy.wrc)) ? mlFGAwy.wrc : 100;
-  var mlHomWRC = (mlFGHom && mlFGHom.wrc && !isNaN(mlFGHom.wrc)) ? mlFGHom.wrc : 100;
-  var mlAwyMult = Math.max(0.60, Math.min(1.50, 1.003 + (mlAwyWRC - 100) * 0.0058));
-  var mlHomMult = Math.max(0.60, Math.min(1.50, 1.003 + (mlHomWRC - 100) * 0.0058));
-  var mlAwySpERA = awySP ? (awySP.xfip || awySP.era || 4.20) : 4.20;
-  var mlHomSpERA = homSP ? (homSP.xfip || homSP.era || 4.20) : 4.20;
-  var mlAwyBPfip = ((getFGBullpen(game.awayTeamId)||{}).fip) || (awyBP ? awyBP.era : 4.30);
-  var mlHomBPfip = ((getFGBullpen(game.homeTeamId)||{}).fip) || (homBP ? homBP.era : 4.30);
+  // ML projection uses same R/G suppression approach as O/U
+  var ML_LGAVG_RPG  = 4.50; var ML_LGAVG_XFIP = 3.88; var ML_LGAVG_BPFIP = 4.30;
+  var ML_SP_FRAC = 5.5/9.0; var ML_BP_FRAC = 3.5/9.0;
   var mlParkF = (game.park && !isNaN(game.park.run)) ? game.park.run : 1.0;
-  // Away team scores against HOME pitching; home scores against AWAY pitching
-  var mlProjAway = mlHomMult * ((mlHomSpERA/9)*mlSP_INN + (mlHomBPfip/9)*mlBP_INN) * mlParkF;
-  var mlProjHome = mlAwyMult * ((mlAwySpERA/9)*mlSP_INN + (mlAwyBPfip/9)*mlBP_INN) * mlParkF;
+  // Team R/G
+  var mlAwyRPG = (function(){ var p=getPythagorean(game.awayTeamId); if(p&&p.g>=8&&p.rpg&&!isNaN(p.rpg))return p.rpg; var fg=getFGBatting(game.awayTeamId); if(fg&&fg.wrc&&!isNaN(fg.wrc))return Math.max(2.5,Math.min(7.0,ML_LGAVG_RPG*(fg.wrc/100))); return ML_LGAVG_RPG; })();
+  var mlHomRPG = (function(){ var p=getPythagorean(game.homeTeamId); if(p&&p.g>=8&&p.rpg&&!isNaN(p.rpg))return p.rpg; var fg=getFGBatting(game.homeTeamId); if(fg&&fg.wrc&&!isNaN(fg.wrc))return Math.max(2.5,Math.min(7.0,ML_LGAVG_RPG*(fg.wrc/100))); return ML_LGAVG_RPG; })();
+  // Pitching suppression
+  var mlAwySpXfip = awySP?(awySP.xfip||awySP.era||ML_LGAVG_XFIP):ML_LGAVG_XFIP;
+  var mlHomSpXfip = homSP?(homSP.xfip||homSP.era||ML_LGAVG_XFIP):ML_LGAVG_XFIP;
+  var mlAwyBPfip = ((getFGBullpen(game.awayTeamId)||{}).fip)||(awyBP?awyBP.era:ML_LGAVG_BPFIP);
+  var mlHomBPfip = ((getFGBullpen(game.homeTeamId)||{}).fip)||(homBP?homBP.era:ML_LGAVG_BPFIP);
+  var mlAwySup = Math.max(0.40,Math.min(2.00, ML_SP_FRAC*(mlAwySpXfip/ML_LGAVG_XFIP) + ML_BP_FRAC*(mlAwyBPfip/ML_LGAVG_BPFIP)));
+  var mlHomSup = Math.max(0.40,Math.min(2.00, ML_SP_FRAC*(mlHomSpXfip/ML_LGAVG_XFIP) + ML_BP_FRAC*(mlHomBPfip/ML_LGAVG_BPFIP)));
+  var mlProjAway = mlAwyRPG * mlHomSup * mlParkF;
+  var mlProjHome = mlHomRPG * mlAwySup * mlParkF;
   // Pythagorean win probability from absolute projected run totals
   var mlPythFromProj = 0.525; // default: slight home field
   if (mlProjHome > 0 && mlProjAway > 0 && !isNaN(mlProjHome) && !isNaN(mlProjAway)) {
@@ -2507,46 +2508,66 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   //   Park factor → environment multiplier
   //   Bullpen ERA for remaining innings (avg SP goes ~5.5 inn)
   //   Weather adjustments
-  var lgAvgRPG = 4.50; // 2025/2026 MLB average runs per game
-  var SP_INN = 5.5;    // expected SP innings
-  var BP_INN = 3.5;    // expected BP innings
-  
-  // Offense-adjusted run rate: OPS 0.720 = league avg
-  // O/U offense multiplier: wRC+ when available (park+league adjusted), else OPS
-  // wRC+ 100 = avg = 4.25 R/G target; each point above/below 100 = ~0.5% run change
-  var getOffMult = function(off, teamId) {
+  // ═══════════════════════════════════════════════════════════════════
+  // O/U PROJECTION v2: R/G-SUPPRESSION APPROACH
+  // ═══════════════════════════════════════════════════════════════════
+  // Formula: proj_runs = team_rpg × opponent_pitch_suppression × park × weather
+  // Calibrated: all-avg inputs → 4.50 R/G per team → 9.0 total (matches market)
+  //
+  // pitch_suppression = sp_frac×(sp_xfip/league_xfip) + bp_frac×(bp_fip/league_bp)
+  //   sp_frac=5.5/9 ≈ 0.611, bp_frac=3.5/9 ≈ 0.389
+  //   suppression < 1 = better than avg = fewer runs
+  //   suppression > 1 = worse than avg = more runs
+  //
+  var LGAVG_RPG   = 4.50;   // MLB avg R/G per team 2025-2026
+  var LGAVG_XFIP  = 3.88;   // MLB avg starter xFIP
+  var LGAVG_BPFIP = 4.30;   // MLB avg bullpen FIP
+  var SP_FRAC = 5.5 / 9.0;  // SP fraction of game
+  var BP_FRAC = 3.5 / 9.0;  // BP fraction
+
+  // Team R/G: prefer actual season R/G from standings, then wRC+, then OPS
+  var getTeamRPG = function(teamId, off) {
+    // 1. Actual runs/game from standings (most predictive — real results)
+    var pyth = getPythagorean(teamId);
+    if (pyth && pyth.g >= 8 && pyth.rpg && !isNaN(pyth.rpg)) return pyth.rpg;
+    // 2. wRC+ from FanGraphs (park-adjusted, better than raw OPS)
     var fg = getFGBatting(teamId);
     if (fg && fg.wrc && !isNaN(fg.wrc)) {
-      return Math.max(0.60, Math.min(1.50, 1.003 + (fg.wrc - 100) * 0.0058));
+      // wRC+100 = league avg 4.50 R/G; each ±10 points ≈ ±0.45 R/G
+      return Math.max(2.5, Math.min(7.0, LGAVG_RPG * (fg.wrc / 100)));
     }
-    var ops = (off && off.ops != null && !isNaN(off.ops)) ? off.ops : 0.720;
-    return Math.max(0.60, Math.min(1.50, 1.003 + (ops - 0.720) * 3.5));
+    // 3. OPS-based estimate (fallback)
+    var ops = (off && off.ops != null && !isNaN(off.ops)) ? off.ops : 0.728;
+    return Math.max(2.5, Math.min(7.0, LGAVG_RPG + (ops - 0.728) * 15));
   };
-  var awyOffMult = getOffMult(awyOff, game.awayTeamId);
-  var homOffMult = getOffMult(homOff, game.homeTeamId);
-  
-  // SP contribution: ERA over expected innings
-  var awySpERA = awySP ? (awySP.xfip || awySP.era || 4.20) : 4.20;
-  var homSpERA = homSP ? (homSP.xfip || homSP.era || 4.20) : 4.20;
-  var awySpRuns = (awySpERA / 9.0) * SP_INN; // runs allowed by away SP (vs home offense)
-  var homSpRuns = (homSpERA / 9.0) * SP_INN; // runs allowed by home SP (vs away offense)
-  
-  // BP contribution: use FG FIP (more reliable) when available, else team ERA
-  var awyBPfipVal = (function(){ var fg=getFGBullpen(game.awayTeamId); return fg ? fg.fip : (awyBP ? awyBP.era : 4.30); })();
-  var homBPfipVal = (function(){ var fg=getFGBullpen(game.homeTeamId); return fg ? fg.fip : (homBP ? homBP.era : 4.30); })();
-  var awyBPruns = (awyBPfipVal / 9.0) * BP_INN;
-  var homBPruns = (homBPfipVal / 9.0) * BP_INN;
-  // Keep legacy vars for display
+  var awyRPG = getTeamRPG(game.awayTeamId, awyOff);
+  var homRPG = getTeamRPG(game.homeTeamId, homOff);
+
+  // Pitching suppression factors for each team
+  var awySpXfip  = awySP ? (awySP.xfip || awySP.era || LGAVG_XFIP) : LGAVG_XFIP;
+  var homSpXfip  = homSP ? (homSP.xfip || homSP.era || LGAVG_XFIP) : LGAVG_XFIP;
+  var awyBPfipVal = (function(){ var fg=getFGBullpen(game.awayTeamId); return fg?fg.fip:(awyBP?awyBP.era:LGAVG_BPFIP); })();
+  var homBPfipVal = (function(){ var fg=getFGBullpen(game.homeTeamId); return fg?fg.fip:(homBP?homBP.era:LGAVG_BPFIP); })();
+  // Keep legacy for display
   var awyBPera = awyBP ? awyBP.era : 4.30;
   var homBPera = homBP ? homBP.era : 4.30;
-  
-  // Expected runs per side = offense mult * (SP runs allowed + BP runs allowed) * park * weather
+
+  // Combined pitching suppression (away team pitching → determines how much home team scores)
+  var awyPitchSup = SP_FRAC * (awySpXfip / LGAVG_XFIP) + BP_FRAC * (awyBPfipVal / LGAVG_BPFIP);
+  var homPitchSup = SP_FRAC * (homSpXfip / LGAVG_XFIP) + BP_FRAC * (homBPfipVal / LGAVG_BPFIP);
+  // Clamp: suppression can't be more than 2× or less than 0.4× league avg
+  awyPitchSup = Math.max(0.40, Math.min(2.00, awyPitchSup));
+  homPitchSup = Math.max(0.40, Math.min(2.00, homPitchSup));
+
+  // Weather multiplier
   var weatherMult = 1.0 + (windImpact * 0.06) + ((tempAdj + humidAdj) * 0.04);
-  weatherMult = Math.max(0.85, Math.min(1.20, weatherMult));
-  
-  // Away team scores against HOME sp+bp, home team scores against AWAY sp+bp
-  var projAwayRuns = homOffMult * (homSpRuns + homBPruns) * pf * weatherMult;
-  var projHomeRuns = awyOffMult * (awySpRuns + awyBPruns) * pf * weatherMult;
+  weatherMult = Math.max(0.88, Math.min(1.18, weatherMult));
+
+  // Projected runs:
+  // Away team scores against HOME pitching × own offense × park × weather
+  // Home team scores against AWAY pitching × own offense × park × weather
+  var projAwayRuns = awyRPG * homPitchSup * pf * weatherMult;
+  var projHomeRuns = homRPG * awyPitchSup * pf * weatherMult;
   // Guard against NaN propagation
   projAwayRuns = isNaN(projAwayRuns) ? 4.25 : projAwayRuns;
   projHomeRuns = isNaN(projHomeRuns) ? 4.25 : projHomeRuns;
