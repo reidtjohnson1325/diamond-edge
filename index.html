@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260416-2203]</title>
+<title>Diamond Edge — MLB 2026 [v20260420-1956]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2023,7 +2023,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260416-2203"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260420-1956"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2594,8 +2594,9 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   var ouScore = Math.round(50 + ouConf * 45);
   ouScore = Math.min(95, Math.max(50, ouScore));
 
-  // Dead zone: gap < 0.25 runs → genuinely no edge
-  if (Math.abs(projGap) < 0.25) { ouScore = 50; ouConf = 0; }
+  // Dead zone: need at least 0.75 run gap to have real edge
+  // 0.25-0.74 run gap is noise — book is probably right
+  if (Math.abs(projGap) < 0.75) { ouScore = 50; ouConf = 0; }
 
   // Direction from projection; fallback to relative signal if gap is tiny
   var ouPlay = (Math.abs(projGap) >= 0.15) ? projDir : ouRelDir;
@@ -2815,8 +2816,8 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   // koRaw > 0.50 = over favored, koRaw < 0.50 = under favored
   var koIsOver = koRaw >= 0.50;
   var koDev = Math.abs(koRaw - 0.50);
-  var koScore = Math.round(50 + koDev * 130); // tightened
-  koScore = Math.min(92, Math.max(25, koScore));
+  var koScore = Math.round(50 + koDev * 130);
+  koScore = Math.min(82, Math.max(25, koScore));  // cap 82 — KO has 38.7% win rate, never STRONG
   var koLine  = spForKO ? (Math.round(spForKO.kPer9 / 9 * expIP * 2) / 2).toFixed(1) : '6.5';
   // Over: pitcher likely to exceed line. Under: contact pitcher, low-K environment
   var koPlay  = koIsOver
@@ -2846,10 +2847,13 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
   // Thresholds calibrated from season data:
   // STRONG=86+ (historically 85-89 was 0% — raise the bar)
   // LEAN=65+ for NRFI/OU, 68+ for ML/KO (tighter due to juice drag)
-  function conf(s) { return s>=86?'STRONG':s>=65?'LEAN':'SKIP'; }
-  function confML(s) { return s>=86?'STRONG':s>=68?'LEAN':'SKIP'; }
-  // NRFI has higher threshold — too volatile for standard STRONG
-  function confNrfi(s) { return s>=86?'STRONG':s>=65?'LEAN':'SKIP'; }
+  // Thresholds raised after 52-63 season — fewer but better plays
+  // Score 65-69 was only profitable bucket; 85-89 was 22% win rate (terrible)
+  // STRONG requires 88+, ML LEAN requires 72+, OU LEAN requires 70+
+  function conf(s) { return s>=88?'STRONG':s>=70?'LEAN':'SKIP'; }     // O/U, NRFI general
+  function confML(s) { return s>=88?'STRONG':s>=72?'LEAN':'SKIP'; }   // ML needs bigger edge
+  function confNrfi(s) { return s>=88?'STRONG':s>=68?'LEAN':'SKIP'; } // NRFI ok slightly lower
+  function confKO(s)   { return s>=88?'STRONG':s>=73?'LEAN':'SKIP'; } // KO raised — 38.7% win rate
   function edgeVal(s) { return parseFloat((s/100*14-4).toFixed(1)); }
 
   // Correlation: elite SP → surface correlated under + favored ML
@@ -2881,7 +2885,7 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
     ml:   {score:mlScore,   play:mlPlay,   edge:parseFloat(mlEdge),  conf:confML(mlScore),  factors:mlFactors},
     ou:   {score:ouScore,   play:ouPlay,   edge:parseFloat(ouEdge),  conf:conf(ouScore),  factors:ouFactors},
     nrfi: {score:nrfiScore, play:nrfiPlay, edge:parseFloat(nrfiEdge),conf:confNrfi(nrfiScore),factors:nrfiFactors},
-    ko:   {score:koScore,   play:koPlay,   edge:parseFloat(koEdge),  conf:confML(koScore),  factors:koFactors},
+    ko:   {score:koScore,   play:koPlay,   edge:parseFloat(koEdge),  conf:confKO(koScore),  factors:koFactors},
     flags: {
       spElite: spElite,
       badBP:   badBP,
