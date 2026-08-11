@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diamond Edge — MLB 2026 [v20260811-1531]</title>
+<title>Diamond Edge — MLB 2026 [v20260811-1545]</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -2432,7 +2432,7 @@ var LEAGUE = {
 
 // Convert a stat to 0-1 percentile (1 = best, 0 = worst)
 // higherIsBetter: true for K/9, OPS etc; false for ERA, WHIP etc
-var BUILD_VERSION = "v20260811-1531"; // type BUILD_VERSION in DevTools to verify deployed file
+var BUILD_VERSION = "v20260811-1545"; // type BUILD_VERSION in DevTools to verify deployed file
 
 function pct(val, mean, sd, higherIsBetter) {
   if (val == null || isNaN(val)) return 0.50;
@@ -2936,25 +2936,27 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
 
   // Team R/G: prefer actual season R/G from standings, then wRC+, then OPS
   // getTeamRPG: use platoon-adjusted wRC+ when SP hand is known
+  // getFGBatting(teamId, 'L'/'R') already handles platoon splits via FG_BATTING_VS_LHP/RHP
   var getTeamRPG = function(teamId, off, oppHand) {
     // 1. Actual runs/game from standings (most predictive — real results)
     var pyth = getPythagorean(teamId);
     if (pyth && pyth.g >= 10 && pyth.rpg && !isNaN(pyth.rpg)) {
       // Adjust for platoon: actual R/G × (platoon_wrc / overall_wrc)
       if (oppHand) {
-        var fgAll = getFGBatting(teamId);
-        var fgPlt = oppHand === 'L' ? getFGBattingVsLHP(teamId) : getFGBattingVsRHP(teamId);
-        if (fgAll && fgPlt && fgAll.wrc && fgPlt.wrc && !isNaN(fgAll.wrc) && !isNaN(fgPlt.wrc) && fgAll.wrc > 0) {
+        var fgAll = getFGBatting(teamId);           // overall wRC+
+        var fgPlt = getFGBatting(teamId, oppHand);  // platoon wRC+ (L or R)
+        if (fgAll && fgPlt && fgAll.wrc && fgPlt.wrc &&
+            !isNaN(fgAll.wrc) && !isNaN(fgPlt.wrc) && fgAll.wrc > 0) {
           var platoonAdj = fgPlt.wrc / fgAll.wrc;
-          platoonAdj = Math.max(0.80, Math.min(1.20, platoonAdj)); // cap adjustment at ±20%
+          platoonAdj = Math.max(0.80, Math.min(1.20, platoonAdj));
           return Math.max(2.5, Math.min(7.5, pyth.rpg * platoonAdj));
         }
       }
       return pyth.rpg;
     }
-    // 2. wRC+ from FanGraphs (park-adjusted), with platoon split if available
-    var fg = getFGBatting(teamId);
-    var fgPlt = oppHand ? (oppHand === 'L' ? getFGBattingVsLHP(teamId) : getFGBattingVsRHP(teamId)) : null;
+    // 2. wRC+ from FanGraphs, with platoon split via getFGBatting(id, hand)
+    var fgPlt = oppHand ? getFGBatting(teamId, oppHand) : null;
+    var fg    = getFGBatting(teamId);
     var useWRC = (fgPlt && fgPlt.wrc && !isNaN(fgPlt.wrc)) ? fgPlt.wrc :
                  (fg && fg.wrc && !isNaN(fg.wrc)) ? fg.wrc : 100;
     if (fg || fgPlt) {
@@ -2964,7 +2966,6 @@ var blendSavantSP = function(spPercents, pitcherId, pitcherName) {
     var ops = (off && off.ops != null && !isNaN(off.ops)) ? off.ops : 0.719;
     return Math.max(2.5, Math.min(7.0, LGAVG_RPG + (ops - 0.719) * 15));
   };
-  // Pass opposing SP hand for platoon adjustment
   var awyRPG = getTeamRPG(game.awayTeamId, awyOff, game.homeH);
   var homRPG = getTeamRPG(game.homeTeamId, homOff, game.awayH);
 
